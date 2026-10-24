@@ -64,3 +64,24 @@ Run `npm test` for disruption and route regression checks, and `npm run build` f
 7. Check at 390px width, keyboard focus visibility, and with OS/browser reduced motion enabled. Confirm particles and transitions are suppressed under reduced motion.
 
 Automated interaction checks exercise component callbacks using a lightweight hook harness; they do not replace browser layout, focus, or animation checks.
+
+## Interactive UX upgrade
+
+The existing graph and Dijkstra implementation are unchanged. No dependencies, API calls, backend, deployment or database were added.
+
+- **Network Universe:** larger keyboard-selectable hubs, coral disruption connections, a sequential demo shipment marker on the current computed route, and visible inspector/routing panels without nested card scrolling. The movement control pauses the marker in place.
+- **Disruption Lab:** the same interactive graph, a hub picker, real fastest/cheapest comparison buttons that update the highlighted path, individual restore chips, and before/after values captured at the last disruption/restoration for both objectives. Equal or worse results are shown truthfully. Reset clears the experiment.
+- **Shipment Journeys:** one RR-2048 simulated record with a spatial journey, time-weighted demo marker, play/pause/scrub controls, selectable checkpoints, source segment costs/durations and checkpoint details. The demo clock resets when the route changes. Source edges have no transport-mode field, so hub-type transfers are shown with “mode not recorded.” Route Segments includes an explanation of directed consecutive connections.
+- **Decision Replay:** chronological event selection, play/pause, previous/next and scrubbing inspect immutable recorded closures and applied routes. New events include the affected hub ID. Events without recorded routes explicitly omit historical path highlighting. Replay selection is separate from the current simulation and cannot mutate it. Prior applied decisions are compared using recorded totals, with a warning that their scenarios can differ.
+
+`usePlayback.ts` owns timer lifecycle, pause/seek/end behavior and reduced-motion preferences. `replay.ts` maps actual segment durations to visual positions. `PlaybackControls.tsx` is shared by the two replays. `ShipmentJourney.tsx` and `IncidentReplay.tsx` keep those experiences independent of the application shell. `interactions.css` refines contrast, responsive sizing, state accents and motion while retaining the original styles.
+
+### Additional manual browser checks
+
+- At 1280×800 and 1440×900, verify full visibility of inspector controls, route metrics and the bottom dock, with no inner card scrollbars. Check mobile stacking at 390px. The page can scroll when content genuinely requires it.
+- In the lab, choose Lowest Cost and disrupt Inland Yard. Baseline values should change from 37 hours / $1,570 to 35 hours / $1,770. Restore it, switch objectives, and verify highlighted edges follow the chosen calculation.
+- Pause/resume network movement. In Journeys, scrub from 0% to 100%, play/pause, select a checkpoint and inspect it on the network. Verify the marker follows segments and a changed route restarts the demo clock.
+- In Decision Replay, select a saved route event, then a disruption event. Confirm only the saved route event highlights a historical route, while both show their recorded closures. Step backward/forward, play to the end, and scrub. Return to the current network and verify it was not changed.
+- Test Tab, Enter/Space and arrow keys on buttons, map checkpoints and range inputs. Enable reduced motion: automatic movement must stop, decorative transitions must disappear, and manually requested replay must remain available.
+
+Automated checks cover all 256 closure combinations, existing hub/route behaviors, lab path selection and before/after values, replay callbacks, checkpoint details, empty history, history isolation, duration-weighted position math, timer cleanup, final-event stopping, route-change resets and reduced-motion autoplay suppression. They use a lightweight React hook/component harness rather than a browser. Layout, visual transitions, actual keyboard focus and screen-reader behavior still require browser verification.

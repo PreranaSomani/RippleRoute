@@ -1,0 +1,191 @@
+/* Interactive workspaces. State accents stay distinct from decorative surfaces. */
+:root {
+  --ocean:#238bce; --mint:#37c9b5; --amber:#ffb45c;
+  --coral:#ff7189; --lavender:#a18bee; --ink:#214e70; --secondary:#4f708a;
+}
+.phase-two {color:var(--ink)}
+.phase-two .glass-panel {backdrop-filter:blur(9px);box-shadow:0 10px 28px #5686a416}
+.phase-two .view-main {padding-top:20px;padding-bottom:130px}
+.phase-two .view-heading {margin-bottom:18px}
+.phase-two .panel-label,.phase-two .eyebrow {font-size:11px;color:#397794;letter-spacing:1.3px}
+.phase-two .view-copy,.phase-two .panel-description,.phase-two .route-panel p {font-size:13px;color:var(--secondary);line-height:1.6}
+.phase-two .location,.phase-two .path-preview,.phase-two .endpoint-note {font-size:12px;color:var(--secondary)}
+.phase-two .button,.phase-two .route-selector button {font-size:12px;min-height:42px}
+.phase-two .icon-button,.phase-two .map-controls button {min-width:42px;min-height:42px}
+.phase-two .route-metrics small,.phase-two .journey-totals small {font-size:10px;color:#446c88}
+.phase-two .network-title small {color:#527b96;font-size:9px}
+.phase-two .network-status {font-size:11px;color:#386d7f}
+.phase-two .network-bottom {color:#4d738e;font-size:12px}
+.phase-two .map-watermark {color:#567b94;font-size:10px}
+.phase-two .map-legend span {font-size:11px;color:#476b85}
+.phase-two .map-legend {pointer-events:none}
+.phase-two button:focus-visible,.phase-two [role=button]:focus-visible,.phase-two input:focus-visible,.phase-two select:focus-visible {outline:3px solid #97580e;outline-offset:4px}
+.phase-two button:disabled {cursor:default;opacity:.5;transform:none;box-shadow:none}
+.phase-two .button.danger-light {color:#a13250;background:#fff0f3;border-color:#f4afbd}
+.phase-two .health-state {color:#247e70;font-size:12px}
+.phase-two .health-state.bad {color:#a33250}
+.phase-two .health-state.bad .live-dot,.legend-dot.disruption {background:var(--coral)}
+.phase-two .live-dot {background:var(--mint)}
+.phase-two .scene-stats .attention,.phase-two .scene-stats .attention b {color:#a33250}
+.phase-two .floating-dock button {font-size:12px;color:#476d88}
+.phase-two .floating-dock button.active {color:white;background:linear-gradient(120deg,var(--ocean),#2068a5)}
+.phase-two .dock-caption {color:#4f718c;font-size:9px}
+/* No card scroll areas: the inspector sits alongside the scene and expands naturally. */
+.phase-two .universe-scene {display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;height:auto;min-height:0}
+.phase-two .universe-inspector {position:static;width:auto;overflow:visible;padding:0;display:flex;flex-direction:column;gap:14px}
+.phase-two .universe-inspector .glass-panel {margin:0;padding:17px}
+.phase-two .universe-inspector .panel-description {display:none}
+.phase-two .universe-inspector .selected-panel>p:last-child {display:block;font-size:12px;margin:0}
+.phase-two .universe-inspector .route-panel h3 {font-size:18px}
+.phase-two .universe-inspector .route-metrics {margin:10px 0}
+.phase-two .universe-inspector .route-metrics>div {padding:10px}
+.phase-two .universe-inspector .route-metrics strong {font-size:24px}
+.phase-two .universe-inspector .path-preview {line-height:1.5;margin:8px 0 12px}
+.phase-two .network-frame {min-height:470px;height:100%}
+.phase-two .network-viewport {min-height:310px}
+.phase-two .network-svg {width:100%}
+.phase-two .map-controls {right:18px}
+.phase-two .network-edge path {transition:stroke .35s,stroke-width .35s,opacity .35s}
+.phase-two .network-edge.route-active path:nth-child(2) {stroke-width:4;opacity:1}
+.phase-two .edge-disrupted path {stroke:var(--coral)}
+.phase-two .hub>circle {transition:fill .25s,stroke .25s}
+.phase-two .node-halo {animation:hub-focus 1.6s ease-out 1;transform-box:view-box}
+.phase-two .hub text {pointer-events:none}
+.shipment-marker {pointer-events:none}
+@keyframes hub-focus {from{opacity:.4;transform:scale(.8)}to{opacity:.19;transform:scale(1)}}
+/* The experiment is spatial, with the actual network beside its controls. */
+.lab-workspace {display:grid;grid-template-columns:minmax(0,1fr) 365px;gap:20px;align-items:start}
+.lab-map {min-width:0}
+.phase-two .lab-map .network-frame {height:455px;min-height:455px}
+.phase-two .lab-map .network-viewport {min-height:250px}
+.lab-impact {margin-top:14px;border:1px solid #abd7e9;background:linear-gradient(100deg,#faffff,#e0f5fa);border-radius:18px;padding:17px 20px;animation:scene-enter .25s}
+.lab-impact>div {display:flex;align-items:center;gap:22px;margin-top:12px;color:#4c738b;font-size:12px}
+.lab-impact strong {display:block;color:#225d80;font-size:19px;margin-top:5px}
+.lab-impact>p {font-size:13px;color:var(--secondary);margin:10px 0 0;line-height:1.5}
+.lab-console {display:flex;flex-direction:column;gap:12px}
+.lab-picker {display:flex;align-items:center;gap:12px}
+.lab-picker label {font-size:12px;font-weight:700;white-space:nowrap}
+.lab-picker select {min-height:42px;width:100%;min-width:0;border:1px solid #a8cbdf;border-radius:10px;background:#f7fcff;color:#295e7c;font:inherit;font-size:13px;padding:8px}
+.lab-console .selected-panel {padding:17px}
+.lab-console .selected-panel .hub-icon-large {float:left;width:40px;height:40px;margin:12px 10px 8px 0}
+.lab-console .selected-panel h2 {font-size:21px;margin-top:12px}
+.lab-console .selected-panel .health-state {clear:both;padding:10px 0}
+.lab-console .selected-panel .panel-description {display:none}
+.lab-console .selected-panel>p:last-child {display:block;margin:0}
+.lab-console .comparison-grid {gap:10px}
+.lab-console .comparison-card {padding:14px;min-height:0;border-color:#c0ddeb;border-radius:16px}
+.lab-console .comparison-card.chosen {border-color:var(--ocean)}
+.lab-console .comparison-card>strong {font-size:26px;margin:10px 0 6px}
+.lab-console .comparison-card>strong small {font-size:12px}
+.lab-console .comparison-card .panel-label {font-size:10px;letter-spacing:.8px}
+.lab-console .comparison-card>span:not(.panel-label) {font-size:12px}
+.lab-console .comparison-card p {font-size:11px;color:#4f718b;line-height:1.5;margin:8px 0}
+.lab-console .comparison-select {color:#246a96;font-size:11px!important}
+.lab-actions {display:flex;gap:9px}
+.lab-actions>button:first-child {flex:1}
+.disruption-chips {display:flex;flex-wrap:wrap;gap:7px}
+.disruption-chip {border:1px solid #efb2bf;color:#a33250;border-radius:24px;background:#fff2f5;padding:9px 12px;min-height:38px;font-size:11px}
+/* The journey is a demo clock on a computed route, with explicit source-data limits. */
+.journey-experience {display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:20px}
+.journey-scene {min-width:0;padding:24px}
+.journey-scene .journey-heading h2 {font-size:24px;margin:10px 0}
+.journey-scene .journey-totals {margin:20px 0 0}
+.journey-scene .journey-totals>div {padding:13px}
+.segment-explanation {display:block;color:#4f718b;font-size:11px;line-height:1.4;margin-top:5px}
+.journey-canvas {display:block;width:100%;min-height:210px;max-height:290px;background:radial-gradient(ellipse at center,#e9f9ff,#fbfeff00);margin:4px 0}
+.journey-canvas [role=button] {cursor:pointer}
+.demo-traveler {pointer-events:none}
+.journey-details {display:flex;flex-direction:column;gap:18px}
+.checkpoint-panel h2 {font-size:23px;margin-top:18px}
+.segment-detail {border-top:1px solid #cce3f0;margin-top:15px;padding:15px 0;color:#346987}
+.segment-detail strong {font-size:12px}
+.segment-detail p {font-size:13px;margin:8px 0}
+.segment-detail small {font-size:12px;line-height:1.6;display:block;color:#4e718a}
+.shipment-truth {padding:10px 15px;color:#4d7d9c}
+.shipment-truth button {display:block;border:0;background:none;color:#265f83;font:700 14px Manrope;margin-top:10px;padding:0;min-height:32px}
+.shipment-truth p {font-size:12px;line-height:1.7;color:#4e718a}
+.playback-controls {display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid #c1deed;padding-top:14px}
+.playback-track {flex:1;min-width:90px}
+.playback-track>span {display:block;font-size:11px;color:#426c87;margin-bottom:4px}
+.playback-track input {display:block;width:100%;accent-color:var(--ocean);min-height:30px;cursor:pointer}
+.playback-controls output {font:700 12px Manrope;min-width:40px;color:#285e80}
+.playback-controls>small {flex-basis:100%;font-size:11px;color:#5d6f80}
+/* Incident replay inspects immutable history, independently of the live experiment. */
+.incident-toolbar {display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:18px}
+.incident-toolbar>div:first-child p {font-size:12px;color:var(--secondary);line-height:1.6;margin:8px 0 0}
+.incident-toolbar .playback-controls {border:0;padding:0;flex:1;max-width:570px}
+.incident-stage {display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px}
+.incident-map {position:relative;min-width:0}
+.phase-two .incident-map .network-frame {min-height:380px;height:400px}
+.phase-two .incident-map .network-viewport {min-height:240px}
+.snapshot-badge {position:absolute;left:20px;top:85px;background:#fff6df;color:#7b531e;border:1px solid #edce96;border-radius:7px;padding:7px 10px;font-size:10px;letter-spacing:.6px;pointer-events:none}
+.incident-detail {padding:22px;animation:scene-enter .25s}
+.incident-detail h2 {font-size:22px;line-height:1.4;margin:18px 0 10px}
+.historical-hub {border-left:3px solid var(--ocean);padding-left:10px;margin:15px 0}
+.historical-hub strong,.historical-hub span {display:block;font-size:13px}
+.historical-hub span {font-size:12px;margin-top:6px;color:#4d718b}
+.snapshot-note {background:#fff5e5;border:1px solid #efd4a4;border-radius:13px;padding:14px;color:#795824;font-size:13px;line-height:1.6}
+.incident-detail .event-route strong {display:block;margin:12px 0 6px;font-size:19px}
+.incident-detail .event-route p {font-size:12px;line-height:1.6;color:#4d718b}
+.incident-detail .previous-decision {border-top:1px solid #bedde9;padding-top:10px}
+.incident-timeline {display:flex;list-style:none;padding:10px 4px 16px;margin:14px 0 0;overflow-x:auto;gap:12px;scrollbar-width:thin}
+.incident-timeline li {flex:0 0 220px}
+.incident-timeline button {width:100%;height:100%;text-align:left;border:1px solid #bed9e8;border-radius:15px;background:#f7fcffb0;padding:15px;color:#365f7c;position:relative;transition:background .2s,border-color .2s}
+.incident-timeline button[aria-current] {background:#e1f4ff;border-color:var(--ocean)}
+.incident-timeline button>small {display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#466e88;margin-bottom:9px}
+.incident-timeline button>strong {font-size:12px;line-height:1.6;display:block}
+.incident-timeline button>span:last-child {display:block;font-size:11px;color:#4d718b;margin-top:8px;line-height:1.5}
+.timeline-dot {float:right;width:9px;height:9px;border-radius:50%;background:var(--ocean);margin-top:3px}
+.timeline-dot.disruption {background:var(--coral)}
+.timeline-dot.restoration,.timeline-dot.initialized {background:var(--mint)}
+.timeline-dot.reset {background:var(--amber)}
+.replay-empty {max-width:700px;margin:40px auto;text-align:center;padding:50px}
+.replay-empty h2 {margin:18px}
+.phase-two .no-route {color:#a33250;font-size:13px}
+@media(max-width:1100px) {
+  .phase-two .universe-scene {grid-template-columns:minmax(0,1fr) 290px;gap:14px}
+  .lab-workspace {grid-template-columns:minmax(0,1fr) 330px;gap:14px}
+  .journey-experience {grid-template-columns:minmax(0,1fr) 260px;gap:14px}
+  .journey-heading {flex-wrap:wrap}
+  .incident-stage {grid-template-columns:minmax(0,1fr) 290px}
+  .incident-toolbar {align-items:flex-start}
+  .incident-toolbar>div:first-child {max-width:260px}
+}
+@media(max-width:800px) {
+  .phase-two .universe-scene,.lab-workspace,.journey-experience,.incident-stage {grid-template-columns:1fr}
+  .phase-two .universe-inspector {display:grid;grid-template-columns:1fr 1fr}
+  .phase-two .network-frame {height:450px;min-height:0}
+  .lab-console {display:grid;grid-template-columns:1fr 1fr;align-items:start}
+  .lab-picker,.lab-actions,.disruption-chips {grid-column:1/-1}
+  .journey-details {display:grid;grid-template-columns:1fr 1fr}
+  .incident-toolbar {display:block}
+  .incident-toolbar>div:first-child {max-width:none;margin-bottom:15px}
+  .incident-toolbar .playback-controls {max-width:none}
+  .incident-detail h2 {font-size:20px}
+  .phase-two .floating-dock button {font-size:10px}
+  .phase-two .network-bottom>span:last-child {display:none}
+}
+@media(max-width:520px) {
+  .phase-two .universe-inspector,.lab-console,.journey-details {display:flex;flex-direction:column}
+  .lab-console>* {width:100%}
+  .journey-scene {padding:17px}
+  .journey-canvas {min-height:180px}
+  .journey-scene .journey-totals {gap:7px}
+  .journey-scene .journey-totals>div {padding:8px}
+  .segment-explanation {font-size:10px}
+  .phase-two .map-watermark {display:none}
+  .phase-two .network-title small {font-size:7px}
+  .phase-two .network-status {font-size:9px;margin:0}
+  .snapshot-badge {font-size:9px}
+  .playback-controls {gap:7px}
+}
+@media(prefers-reduced-motion:reduce) {
+  .phase-two .network-edge path,.phase-two .hub>circle,.incident-timeline button {transition:none}
+  .phase-two .node-halo,.incident-detail,.lab-impact {animation:none}
+}
+
+.shipment-marker {transition:transform 180ms linear}
+.demo-traveler {transition:transform 250ms linear}
+.phase-two .network-status.disrupted {color:#a33250}
+.phase-two .network-status.disrupted .live-dot {background:var(--coral)}
+@media(prefers-reduced-motion:reduce) {.shipment-marker,.demo-traveler {transition:none}}

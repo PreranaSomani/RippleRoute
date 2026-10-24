@@ -1,5 +1,7 @@
 export type HubType='mill'|'port'|'rail'|'warehouse'|'destination';
 export type Hub={id:string;label:string;type:HubType;x:number;y:number;city:string};
+// capacity: cargo tonnes admitted per edge for one 48-hour dispatch cohort; no temporal reuse.
+// cost: fixed USD booking charge per shipment on this edge, not USD/tonne.
 export type Connection={id:string;from:string;to:string;hours:number;cost:number;capacity:number};
 export type Route={ids:string[];edgeIds:string[];hours:number;cost:number};
 export const hubs:Hub[]=[
@@ -16,7 +18,7 @@ export const hubs:Hub[]=[
 ];
 const e=(from:string,to:string,hours:number,cost:number,capacity=120):Connection=>({id:`${from}-${to}`,from,to,hours,cost,capacity});
 export const connections:Connection[]=[
-e('mill','rail1',9,560),e('mill','yard',12,400),e('rail1','portA',8,540),e('rail1','rail2',8,260),e('yard','rail2',6,360),e('yard','depot',16,740),e('rail2','portB',11,420),e('rail2','depot',9,520),e('portA','portB',6,800),e('portA','portC',14,920),e('portB','portC',8,610),e('portB','site',13,760),e('portB','depot',6,350),e('portC','site',7,440),e('depot','site',9,430),e('depot','hub',4,220),e('hub','site',7,400)];
+e('mill','rail1',9,560),e('mill','yard',12,400),e('rail1','portA',8,540),e('rail1','rail2',8,260),e('yard','rail2',6,360),e('yard','depot',16,740),e('rail2','portB',11,420,90),e('rail2','depot',9,520,90),e('portA','portB',6,800),e('portA','portC',14,920),e('portB','portC',8,610),e('portB','site',13,760),e('portB','depot',6,350,80),e('portC','site',7,440),e('depot','site',9,430),e('depot','hub',4,220,90),e('hub','site',7,400)];
 // Connections are directed freight legs; reverse travel requires an explicit edge.
 export const originId='mill';
 export const destinationId='site';

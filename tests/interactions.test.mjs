@@ -12,7 +12,7 @@ function moduleUrl(path){
   if(cache.has(path))return cache.get(path);
   const code=compile(path).replace(/from ['"]([^'"]+)['"]/g,(_,name)=>{
     if(name==='react')return `from '${hooks}'`;
-    if(name.startsWith('./')){const base='../src/'+name.slice(2);return `from '${moduleUrl(base+(existsSync(new URL(base+'.ts',import.meta.url))?'.ts':'.tsx'))}'`;}
+    if(name.startsWith('./')){const base='../src/'+name.slice(2).replace(/\.tsx?$/, '');return `from '${moduleUrl(base+(existsSync(new URL(base+'.ts',import.meta.url))?'.ts':'.tsx'))}'`;}
     return `from '${import.meta.resolve(name)}'`;
   });
   const result=url(code);cache.set(path,result);return result;
@@ -58,11 +58,11 @@ test('four views share scenario, applied journey, decision snapshots, and reset'
   button('Shipment Journeys').props.onClick();update();
   assert.ok(nodes(tree).some(n=>n.props?.className?.trim()==='journey-status'&&text(n)==='Route applied'));
   assert.ok(text(tree).includes('SIMULATED RECORD'));
-  assert.ok(text(tree).includes('No additional shipment records'));
+  assert.ok(text(tree).includes('Five fictional fleet records'));
   assert.ok(!nodes(tree).filter(n=>n.type==='ol'&&n.props.className==='journey-stages').some(n=>text(n).includes('Central Junction')));
   button('Decision Replay').props.onClick();update();
   assert.ok(text(tree).includes('Lowest-cost route applied to RR-2048'));
-  nodes(tree).find(n=>n.props?.['aria-label']==='incident replay position').props.onChange({target:{value:simulatedEventCount(tree)-1}});update();
+  nodes(tree).filter(n=>n.type==='button'&&n.props?.['aria-label']?.startsWith('Replay event ')).at(-1).props.onClick();update();
   assert.ok(text(tree).includes('Central Junction disrupted'));
   assert.ok(text(tree).includes('1 disrupted: Central Junction'));
   button('Network Universe').props.onClick();update();
@@ -124,7 +124,7 @@ test('journey replay supports play, pause, scrubbing, checkpoint selection, and 
   assert.ok(nodes(tree).some(n=>n.type==='h2'&&text(n)==='Union Depot'));
 });
 
-test('incident storyboard supports steps, scrub, recorded route strips, and historical isolation',()=>{
+test('incident storyboard supports event selection, compact pause/restart, recorded route strips, and isolation',()=>{
   button('Decision Replay').props.onClick();update();
   const byLabel=label=>nodes(tree).find(n=>n.props?.['aria-label']===label);
   const eventButtons=nodes(tree).filter(n=>n.type==='button'&&n.props?.['aria-label']?.startsWith('Replay event '));
@@ -133,16 +133,18 @@ test('incident storyboard supports steps, scrub, recorded route strips, and hist
   assert.ok(text(tree).includes('RECORDED ROUTE DECISION'));
   assert.ok(nodes(tree).some(n=>n.props?.className==='story-route'));
   assert.equal(nodes(tree).some(n=>n.props?.['aria-label']==='Interactive network map'),false);
-  byLabel('Previous incident replay event').props.onClick();update();
+  eventButtons[eventButtons.indexOf(routeEvent)-1].props.onClick();update();
   assert.ok(text(tree).includes('BEFORE'));
   assert.ok(text(tree).includes('AFTER'));
   assert.equal(nodes(tree).filter(n=>n.props?.['data-route-edge']).length,0);
-  byLabel('Next incident replay event').props.onClick();update();
+  routeEvent.props.onClick();update();
   assert.ok(text(tree).includes('RECORDED ROUTE DECISION'));
   byLabel('Play incident replay').props.onClick();update();assert.ok(byLabel('Pause incident replay'));
   byLabel('Pause incident replay').props.onClick();update();assert.ok(byLabel('Play incident replay'));
-  byLabel('incident replay position').props.onChange({target:{value:0}});update();
-  assert.equal(byLabel('Previous incident replay event').props.disabled,true);
+  byLabel('Restart incident story').props.onClick();update();
+  assert.ok(text(tree).includes('1 /'));
+  assert.equal(byLabel('incident replay position'),undefined);
+  assert.equal(nodes(tree).some(n=>n.type==='button'&&text(n).trim()==='Play'),false);
   assert.equal(nodes(tree).some(n=>n.props?.['aria-label']==='Inspect Allegheny Rail'),false);
   button('Network Universe').props.onClick();update();
   assert.ok(nodes(tree).some(n=>n.type==='h2'&&text(n)==='Union Depot'));
@@ -242,4 +244,24 @@ test('Gemini advisor only runs on click, blocks duplicate requests, displays a r
     assert.ok(text(tree).includes('Gemini quota reached.'));
     assert.ok(button('Retry Gemini analysis'));
   }finally{globalThis.fetch=originalFetch;}
+});
+
+test('fleet mode allocates, detects stale results, restores disruptions and sends actual fleet facts to Gemini',async()=>{
+  button('Disruption Lab').props.onClick();update();
+  const byLabel=label=>nodes(tree).find(n=>n.props?.['aria-label']===label);
+  byLabel('Reset scenario').props.onClick();update();
+  button('Fleet planning · 5 simulated shipments').props.onClick();update();
+  assert.ok(text(tree).includes('SHARED CAPACITY'));assert.ok(text(tree).includes('RR-2052'));
+  assert.equal(byLabel('Gemini AI Advisor'),undefined);
+  button('Optimize Fleet').props.onClick();update();
+  assert.ok(text(tree).includes('Independent plans exceed capacity on 1 segments'));
+  assert.ok(byLabel('Gemini AI Advisor'));
+  const originalFetch=globalThis.fetch;let sent;
+  globalThis.fetch=async(_url,config)=>{sent=JSON.parse(config.body);return {ok:true,json:async()=>({source:'gemini',model:'test',analysis:{incidentSummary:'Shared capacity is reserved.',recommendedRouteId:null,explanation:'The supplied fleet allocation respects edge capacity.',tradeoffs:[],warnings:[]}})};};
+  try{await (button('Analyze with Gemini')??button('Retry Gemini analysis')).props.onClick();update();assert.equal(sent.mode,'fleet');assert.equal(sent.report.current.metrics.shipmentCount,5);assert.ok(text(tree).includes('Verified fleet report'));}finally{globalThis.fetch=originalFetch;}
+  byLabel('Fleet disruption hub').props.onChange({target:{value:'depot'}});update();button('Disrupt selected hub').props.onClick();update();
+  assert.ok(text(tree).includes('Re-run Optimize Fleet'));assert.equal(byLabel('Gemini AI Advisor'),undefined);
+  button('Optimize Fleet').props.onClick();update();assert.ok(text(tree).includes('no-route'));
+  button('Restore selected hub').props.onClick();update();
+  button('Single shipment planning').props.onClick();update();assert.ok(byLabel('Planning origin'));
 });

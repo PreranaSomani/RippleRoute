@@ -65,3 +65,28 @@ test('HTTP returns validated provider output and rejects concurrent analyses',as
     finish();const result=await pending;assert.equal(result.status,200);assert.equal((await result.json()).source,'gemini');
   }finally{finish?.();await new Promise(resolve=>server.close(resolve));}
 });
+
+test('fleet advisor verifies capacity-aware results, passes real deadlines and requires no single-route ID',async()=>{
+  const {compareFleet,shipments}=await import('../src/fleet.ts');
+  const closed=['depot'];
+  const payload={mode:'fleet',objective:'hours',disruptedHubIds:closed,shipments,report:compareFleet(shipments,closed,'hours'),options:[]};
+  let facts;
+  const result=await createAdvisor({apiKey:'test',generate:async p=>{facts=JSON.parse(p.contents);return {text:JSON.stringify({...analysis,recommendedRouteId:null})};}})(payload);
+  assert.equal(result.analysis.recommendedRouteId,null);assert.deepEqual(facts.report,payload.report);assert.equal(facts.shipments[0].deadlineHours,shipments[0].deadlineHours);assert.equal(facts.capacityPolicy,undefined);assert.equal(facts.report.capacityPolicy.unit,'tonnes');
+  await assert.rejects(()=>createAdvisor({apiKey:'test',generate:response(analysis)})(payload),e=>e.code==='INVALID_RECOMMENDATION');
+  const forged=structuredClone(payload);forged.report.current.metrics.totalRouteCost=1;
+  await assert.rejects(()=>createAdvisor({apiKey:'test',generate:response(analysis)})(forged),e=>e.status===400);
+  const stale={...payload,disruptedHubIds:[]};await assert.rejects(()=>createAdvisor({apiKey:'test',generate:response(analysis)})(stale),e=>e.status===400);
+});
+
+test('fleet report fits the bounded HTTP contract and returns a verified fleet explanation',async()=>{
+  const {compareFleet,shipments}=await import('../src/fleet.ts');
+  const payload={mode:'fleet',objective:'hours',disruptedHubIds:[],shipments,report:compareFleet(shipments,[]),options:[]};
+  assert.ok(Buffer.byteLength(JSON.stringify(payload))<24*1024);
+  const server=createApp({apiKey:'test',generate:response({...analysis,recommendedRouteId:null})}).listen(0,'127.0.0.1');
+  await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+  try{
+    const result=await fetch(`http://127.0.0.1:${server.address().port}/api/ai/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    assert.equal(result.status,200);assert.equal((await result.json()).analysis.recommendedRouteId,null);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});

@@ -1,9 +1,12 @@
+import {shipments} from './fleet';
 import {hubs,type Route} from './network';
 import type {Simulation} from './useSimulation';
 export type Analysis={incidentSummary:string;recommendedRouteId:'fastest'|'cheapest'|null;explanation:string;tradeoffs:string[];warnings:string[]};
 export type AdvisorResponse={source:'gemini';model:string;analysis:Analysis};
 export function advisorInput(sim:Simulation){
-  return {origin:sim.origin,destination:sim.destination,scenario:sim.context,objective:sim.objective,disruptedHubIds:[...sim.closed].sort(),originalRoute:sim.previous?.[sim.objective]??null,options:[{id:'fastest',route:sim.fastest},{id:'cheapest',route:sim.cheapest}].flatMap(({id,route})=>route?[{id,...route}]:[])};
+  if(sim.planningMode==='fleet'&&!sim.currentFleet)throw new Error('Re-run fleet allocation before requesting advice.');
+  if(sim.planningMode==='fleet'&&sim.currentFleet)return {mode:'fleet' as const,objective:sim.objective,disruptedHubIds:[...sim.closed].sort(),shipments,report:sim.currentFleet,options:[]};
+  return {mode:'single' as const,origin:sim.origin,destination:sim.destination,scenario:sim.context,objective:sim.objective,disruptedHubIds:[...sim.closed].sort(),originalRoute:sim.previous?.[sim.objective]??null,options:[{id:'fastest',route:sim.fastest},{id:'cheapest',route:sim.cheapest}].flatMap(({id,route})=>route?[{id,...route}]:[])};
 }
 export function routeLabel(route:Route){return route.ids.map(id=>hubs.find(h=>h.id===id)?.label).join(' → ');}
 export async function requestAdvice(input:ReturnType<typeof advisorInput>,signal:AbortSignal):Promise<AdvisorResponse>{

@@ -1,3 +1,5 @@
+import {isDeepStrictEqual} from 'node:util';
+import {compareFleet,shipments} from '../src/fleet.ts';
 import {z} from 'zod';
 import {connections,findRoute,hubs,validEndpoints} from '../src/network.ts';
 
@@ -6,8 +8,18 @@ export class AdvisorError extends Error {
 }
 const hubId=z.enum(hubs.map(h=>h.id));
 const route=z.object({ids:z.array(hubId).min(2).max(hubs.length),edgeIds:z.array(z.string().max(60)).min(1).max(connections.length),hours:z.number().finite().positive(),cost:z.number().finite().nonnegative()}).strict();
-const input=z.object({origin:hubId,destination:hubId,scenario:z.enum(['RR-2048','Custom plan']),objective:z.enum(['hours','cost']),disruptedHubIds:z.array(hubId).max(hubs.length),originalRoute:route.nullable(),options:z.array(route.extend({id:z.enum(['fastest','cheapest'])})).max(2)}).strict();
+const input=z.object({mode:z.literal('single').optional(),origin:hubId,destination:hubId,scenario:z.enum(['RR-2048','Custom plan']),objective:z.enum(['hours','cost']),disruptedHubIds:z.array(hubId).max(hubs.length),originalRoute:route.nullable(),options:z.array(route.extend({id:z.enum(['fastest','cheapest'])})).max(2)}).strict();
+const fleetInput=z.object({mode:z.literal('fleet'),objective:z.enum(['hours','cost']),disruptedHubIds:z.array(hubId).max(hubs.length),shipments:z.array(z.unknown()).length(shipments.length),report:z.unknown(),options:z.array(z.never()).max(0)}).strict();
 export function validateInput(raw){
+  if(raw?.mode==='fleet'){
+    const parsed=fleetInput.safeParse(raw);
+    if(!parsed.success)throw new AdvisorError(400,'INVALID_INPUT','Invalid fleet analysis request.');
+    const data=parsed.data;
+    if(new Set(data.disruptedHubIds).size!==data.disruptedHubIds.length||!isDeepStrictEqual(data.shipments,shipments))throw new AdvisorError(400,'INVALID_INPUT','Fleet records must match the fictional dispatch cohort.');
+    const report=compareFleet(shipments,data.disruptedHubIds,data.objective);
+    if(!isDeepStrictEqual(data.report,report))throw new AdvisorError(400,'INVALID_ROUTES','Fleet report does not match server-verified shared-capacity allocation.');
+    return {...data,shipments,report};
+  }
   const parsed=input.safeParse(raw);
   if(!parsed.success)throw new AdvisorError(400,'INVALID_INPUT','Invalid incident data. Send endpoints, scenario, disruptions and computed route options.');
   const data=parsed.data;
@@ -40,6 +52,7 @@ export function validateOutput(text,data){
   return value;
 }
 export function modelContext(data){
+  if(data.mode==='fleet')return {...data,network:'Fictional directed dispatch cohort; no live freight data',constraints:'Use only recorded cargo quantities, priorities, deadlines and computed allocation. Heuristic baseline is not globally optimal. recommendedRouteId must be null because this is a fleet report, not a single route. No dropped freight may be described as cost savings.'};
   const describe=r=>r?{...r,path:r.ids.map(id=>hubs.find(h=>h.id===id).label)}:null;
   return {...data,origin:{id:data.origin,label:hubs.find(h=>h.id===data.origin).label},destination:{id:data.destination,label:hubs.find(h=>h.id===data.destination).label},disruptedHubs:data.disruptedHubIds.map(id=>({id,label:hubs.find(h=>h.id===id).label})),originalRoute:describe(data.originalRoute),options:data.options.map(describe),network:'Fictional directed demonstration graph; no live freight data',constraints:'No deadline, delivery progress or transport-mode data is recorded.'};
 }

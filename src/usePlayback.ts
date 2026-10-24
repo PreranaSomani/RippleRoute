@@ -19,7 +19,7 @@ export function usePlayback(max:number,signature:string,step:number,interval:num
     return ()=>media.removeEventListener('change',update);
   },[]);
   useEffect(()=>{setPosition(0);setRunning(auto&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches);},[signature,auto]);
-  useEffect(()=>{setRunning(enabled&&auto&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches);},[enabled,auto]);
+  useEffect(()=>{if(enabled&&auto)setPosition(0);setRunning(enabled&&auto&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches);},[enabled,auto]);
   useEffect(()=>{
     if(!enabled||!visible||!running||max<=0)return;
     const timer=window.setInterval(()=>setPosition(p=>advance(p,max,step,loop)),interval);

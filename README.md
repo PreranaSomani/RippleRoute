@@ -168,3 +168,50 @@ npm test
 Tests use injected provider responses rather than calling Google. They cover invalid data, forged routes, missing keys, malformed output, invalid recommendations, no-route output, provider failures, HTTP health/errors/success/concurrency, and advisor click/loading/duplicate/error/retry behavior, in addition to the original 17 regressions.
 
 A genuine external Gemini response has **not been verified in this workspace** because no `server/.env` API key is configured. After adding your key, click Analyze and confirm a response with the configured model label; then change a disruption while analyzing, exercise retry, and test a no-route scenario. Never treat provider-injected test responses as live-call verification.
+
+## Multi-shipment capacity-aware planning
+
+**Disruption Lab → Fleet planning → Optimize Fleet** runs a deterministic simulated dispatch cohort. Single shipment planning, its directed Dijkstra routes, animations, route application, custom endpoints and Gemini controls are preserved. Existing single exploration assumes a 35-tonne booking and makes no fleet reservations. Changing its endpoints does not rewrite fleet records.
+
+### Domain and units
+
+`src/fleet.ts` defines the typed `Shipment` model (`id`, `origin`, `destination`, `cargo`, `cargoQuantityTonnes`, `priority`, `deadlineHours`, `status`, `simulated`) and five fictional industrial records. RR-2048 remains the original 35-tonne Steelworks → Build Site example. The other four have distinct endpoint pairs, demands, priorities and deadlines; they are explicitly seeded fictional data, not live freight.
+
+Every directed edge's `capacity` is **tonnes admitted for one shared 48-hour dispatch cohort**, not tonnes/hour, shipment count or truck count. A shipment consumes its full cargo quantity on every segment. Reservations persist for the entire allocation run; shipments cannot split, share a partial booking or reuse capacity later. This is a conservative cohort-booking model, not a time-expanded transport schedule. Route arrival can extend beyond the dispatch window; the window defines dispatch admissions rather than rolling physical throughput. `capacityPolicy` is returned with every comparison.
+
+Existing edge costs remain **fixed USD booking charges per shipment per segment**, independent of tonnage. Route costs add those weights directly; they are not silently multiplied by cargo demand. Travel times are hours from a common simulated dispatch at time zero. Deadlines are relative arrival-hour limits, not fabricated calendar dates. Deadlines and priorities now exist for the seeded fleet and are passed to fleet AI analysis.
+
+Four directed segments have explicit lower capacities (all in tonnes): Central Junction → Union Depot 90, Central Junction → Bluewater Port 90, Bluewater Port → Union Depot 80, Union Depot → Midway Hub 90. Other segments retain 120. All remain large enough for the original single-shipment 35-tonne routing behavior.
+
+### Allocation and comparisons
+
+The ten-hub graph permits enumerating all simple directed paths with cycle protection. `candidateRoutes` returns distinct routes whose every edge can individually carry a shipment. All such candidates are retained, including alternatives beyond the independently fastest and cheapest paths. This exhaustive enumeration is deliberately scoped to the small demo; it is exponential and should be replaced for a much larger network.
+
+`allocateFleet` sorts critical/high/normal priority, earliest deadline, then stable shipment ID. It selects a route fitting **remaining shared capacity**, preferring on-time arrival, then the selected time/cost objective, the other metric, then route ID. It reserves capacity before processing the next shipment. It never assumes independently shortest routes are simultaneously feasible. Late-but-routed shipments get explicit deadline-violation flags. `no-route` means no directed path under closures; `insufficient-capacity` distinguishes physical cargo limits from previously reserved shared capacity. Invalid records and impossible reservations are rejected or reported, never silently overbooked.
+
+This is a **priority/deadline first-fit baseline heuristic, not a global optimum**. `compareFleet` returns the undisrupted capacity-aware baseline, current capacity-aware plan, independent plans, independent overbooked segments, candidate routes, allocation order, failure reasons and per-edge reserved/remaining capacity. It is a reproducible starting point for future optimization comparisons, not a claim of cost savings.
+
+Metric definitions:
+
+- Routed/unallocated counts use actual successful reservations.
+- Total route cost sums allocated bookings only, with unallocated freight reported alongside it.
+- Estimated delivery time is the latest arrival among allocated shipments; it is null when none are allocated. Total transit hours is the sum of allocated shipment-hours.
+- Deadline violations count allocated shipments arriving after their deadlines. Unallocated shipments are separately unresolved, not presumed on-time.
+- Disrupted shipment count means undisrupted capacity-aware baseline assignments whose paths touch a currently closed hub, whether rerouted or unallocated afterward.
+- Total added cost sums positive increases only for shipments routed in **both** baseline/current plans. Signed matched cost change, matched population and newly unallocated IDs are separate. Lost allocations are never presented as savings.
+
+For the default fastest cohort, independent plans demand **105 tonnes on Central Junction → Union Depot**, exceeding its 90-tonne limit. The heuristic instead routes all five without overbooking: computed total $6,790, last allocated arrival hour 36. These are reproducible demo outputs, not performance or optimality claims.
+
+### Integration and validation
+
+`useSimulation.ts` stores planning mode and signed fleet results. Optimize Fleet records a local immutable event snapshot. Changed closures/objective invalidate the result, hide stale AI advice and require a re-run. Reset restores single mode, clears the run, and preserves recorded history. The fleet workspace reuses existing controls and shared disruptions; current single-plan endpoints keep their existing protection policy. Fleet records themselves can have disrupted origins/destinations, in which case their allocations become no-route.
+
+`FleetWorkspace.tsx` provides the mode comparison, objective, cohort table, computed metrics, candidate details and reservation table. Journey animations continue to preview the selected single plan. Decision Replay can inspect recorded fleet metrics without changing current reservations.
+
+Gemini fleet requests contain the canonical seeded shipment records and the actual full computed comparison. The server uses the same domain module to recompute and validate the report; stale or forged metrics/routes/reservations are rejected. Fleet analysis requires `recommendedRouteId: null` because a fleet allocation is not one single route ID. The existing single-route request contract and API protections remain supported. Neither Gemini nor a view toggle changes reservations; no solver, database or sponsor integration was added.
+
+Run `npm run build` and `npm test`. Regression coverage includes individual candidate feasibility, independently overbooked routes, shared reservations, priority/deadline ordering, no-route versus capacity failures, deterministic ordering, all 256 intermediate-disruption combinations, metrics, stale-run UI, fleet Gemini validation and the existing single-plan/API/playback tests. Provider tests use injected responses; this change does not certify a live external Gemini call.
+
+Manual check: optimize the default fleet; inspect the 90-tonne bottleneck and alternate routes; disrupt Union Depot and re-run; compare failures/added cost; request fleet Gemini analysis; restore the hub and re-run. Switch back to single planning and confirm its endpoints, routing controls, journey animation and AI workflow still work. Check the cohort table at laptop/mobile widths.
+
+Next: introduce editable/versioned shipment inputs and capacity scenarios; compare a second allocation strategy using these same matched-cohort metrics; replace exhaustive paths with bounded k-shortest/residual-path search as graph size grows; add time-window scheduling only when a temporal capacity model is explicitly defined.

@@ -80,7 +80,8 @@ test('journey autoplay is view-scoped, loops, resets on endpoint changes, and su
 
 test('shared simulation resets journey on endpoint changes and preserves historical route snapshots',async()=>{
   const playbackUrl=url(playbackCode);
-  const simulationCode=compile('useSimulation.ts').replace("from 'react'",`from '${hooksUrl}'`).replace("from './usePlayback'",`from '${playbackUrl}'`).replace("from './network'",`from '${networkUrl}'`);
+  const fleetUrl=url(compile('fleet.ts').replace("from './network.ts'",`from '${networkUrl}'`));
+  const simulationCode=compile('useSimulation.ts').replace("from './fleet'",`from '${fleetUrl}'`).replace("from 'react'",`from '${hooksUrl}'`).replace("from './usePlayback'",`from '${playbackUrl}'`).replace("from './network'",`from '${networkUrl}'`);
   const {useSimulation,shipment}=await import(url(simulationCode));
   let timers=new Map(),nextTimer=0;
   globalThis.window={setInterval(fn){timers.set(++nextTimer,fn);return nextTimer;},clearInterval(id){timers.delete(id);},matchMedia(){return {matches:false,addEventListener(){},removeEventListener(){}};}};
@@ -97,10 +98,15 @@ test('shared simulation resets journey on endpoint changes and preserves histori
   assert.equal(shipment.originId,'mill');assert.equal(shipment.destinationId,'site');
   assert.equal(sim.changeEndpoints('site','site'),false);
   sim.changeEndpoints('site','portA');sim=update();assert.equal(sim.active,null);assert.equal(sim.journeyPlayback.running,false);
-  view='replay';sim=update();assert.equal(timers.size,0);
+  view='replay';sim=update();assert.equal(timers.size,1);assert.equal(sim.incidentPlayback.running,true);assert.equal(sim.incidentPlayback.position,0);
   const current={origin:sim.origin,destination:sim.destination,closed:[...sim.closed]};
   sim.incidentPlayback.seek(1);sim=update();
   assert.deepEqual({origin:sim.origin,destination:sim.destination,closed:sim.closed},current);
+  sim.incidentPlayback.replay();sim=update();
+  for(let i=0;i<sim.history.length;i++){[...timers.values()].forEach(fn=>fn());sim=update();}
+  assert.equal(sim.incidentPlayback.running,false);assert.equal(timers.size,0);
+  view='network';sim=update();view='replay';sim=update();
+  assert.equal(sim.incidentPlayback.position,0);assert.equal(sim.incidentPlayback.running,true);
   sim.reset();sim=update();assert.equal(sim.origin,'mill');assert.equal(sim.destination,'site');
   assert.equal(JSON.stringify(sim.history.find(e=>e.kind==='route')),saved);
   dispose();assert.equal(timers.size,0);delete globalThis.window;

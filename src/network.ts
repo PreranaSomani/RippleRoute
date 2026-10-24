@@ -20,14 +20,16 @@ e('mill','rail1',9,560),e('mill','yard',12,400),e('rail1','portA',8,540),e('rail
 // Connections are directed freight legs; reverse travel requires an explicit edge.
 export const originId='mill';
 export const destinationId='site';
-export const canDisrupt=(id:string)=>hubs.some(h=>h.id===id)&&id!==originId&&id!==destinationId;
-export function toggleDisruption(closed:string[],id:string):string[]{
-  if(!canDisrupt(id))return closed;
+export const validEndpoints=(origin:string,destination:string)=>origin!==destination&&hubs.some(h=>h.id===origin)&&hubs.some(h=>h.id===destination);
+export const canDisrupt=(id:string,origin=originId,destination=destinationId)=>hubs.some(h=>h.id===id)&&id!==origin&&id!==destination;
+export function toggleDisruption(closed:string[],id:string,origin=originId,destination=destinationId):string[]{
+  if(closed.includes(id))return closed.filter(x=>x!==id);
+  if(!canDisrupt(id,origin,destination))return closed;
   return closed.includes(id)?closed.filter(x=>x!==id):[...closed,id];
 }
 export function findRoute(origin:string,destination:string,metric:'hours'|'cost',closed:string[],minCapacity=35):Route|null {
   const ids=new Set(hubs.map(h=>h.id));
-  if(!ids.has(origin)||!ids.has(destination)||closed.includes(origin)||closed.includes(destination))return null;
+  if(origin===destination||!ids.has(origin)||!ids.has(destination)||closed.includes(origin)||closed.includes(destination))return null;
   const dist=new Map<string,number>([[origin,0]]), prev=new Map<string,Connection>(), seen=new Set<string>();
   while(true){
     let current:string|undefined, best=Infinity;

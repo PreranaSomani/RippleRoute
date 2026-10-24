@@ -85,3 +85,86 @@ The existing graph and Dijkstra implementation are unchanged. No dependencies, A
 - Test Tab, Enter/Space and arrow keys on buttons, map checkpoints and range inputs. Enable reduced motion: automatic movement must stop, decorative transitions must disappear, and manually requested replay must remain available.
 
 Automated checks cover all 256 closure combinations, existing hub/route behaviors, lab path selection and before/after values, replay callbacks, checkpoint details, empty history, history isolation, duration-weighted position math, timer cleanup, final-event stopping, route-change resets and reduced-motion autoplay suppression. They use a lightweight React hook/component harness rather than a browser. Layout, visual transitions, actual keyboard focus and screen-reader behavior still require browser verification.
+
+## Core product update — endpoint planning, automatic journeys, incident storyboard
+
+The active planning endpoints now belong to shared simulation state. `EndpointPlanner.tsx` appears in Network Universe and Disruption Lab with origin/destination selectors, swap and the RR-2048 demo preset. Identical and unknown pairs are rejected. The graph remains directed and Dijkstra still uses the original edge weights. Active endpoints are protected from new disruptions; a previously closed hub selected as an endpoint stays closed and can be restored. Other closures remain intact across endpoint changes.
+
+RR-2048 remains the immutable Steelworks → Build Site simulated source example. Other endpoint pairs are labeled **Custom plan**, create no shipment record, clear stale applied routes, and update route highlighting, metrics, journey labels and event context. Loading the demo preset changes the planning endpoints without clearing closures; Reset restores the complete baseline.
+
+Journey playback automatically starts when its view opens unless reduced motion is enabled. It follows curved, duration-weighted segments, marks the active segment/next checkpoint, loops, and supports pause/play, replay and scrubbing. Changed endpoints/routes reset its clock. Timers are suspended while the document is hidden or their view is inactive, and listeners/timers clean up on unmount.
+
+Decision Replay now uses a map-free storyboard. Significant local events show narrative moments, recorded before/after route strips and actual totals. Missing historical snapshots are labeled explicitly. Playback appears only with at least two meaningful events. Setup/reset records are compactly grouped, and repeated baseline resets do not create duplicate events. Existing historical records remain intact and independent of current planning state. No external integrations were added.
+
+### Browser checklist for this update
+
+1. In Network Universe, set **Harbor East → Build Site**. Both route objectives should recalculate. Swap them and confirm the reverse direction shows a friendly no-route state; swap back. Confirm identical endpoint options are disabled.
+2. Switch to Disruption Lab and verify the endpoints stayed synchronized. Disrupt an intermediate hub, then select that closed hub as an endpoint. Confirm it stays unavailable, can be restored, and becomes protected from new disruptions once reopened.
+3. Apply a custom route and open Shipment Journeys. Confirm the heading uses the chosen endpoints, labels it a custom plan, and keeps the saved RR-2048 example labeled Steelworks → Build Site. The marker should start without clicking Play, highlight the current segment/next checkpoint, and follow the curved path.
+4. Pause, scrub, replay and click checkpoints. Return to planning, change an endpoint, and reopen Journeys: the demo clock should start at the new route. Load the RR-2048 preset and confirm the demo context returns.
+5. Change browser tabs while playing, then return: the demo should resume from the paused hidden-tab position rather than advance in the background. Enable reduced motion and confirm there is no automatic movement.
+6. In Decision Replay, check recorded before/after route strips for disruptions and endpoint changes. Apply a route to create a decision event. Select events, step and scrub, then return to the current plan and verify its endpoints and closures did not change.
+7. Reload to get initial-only history; Decision Replay should show its helpful start state without playback. Repeated resets at baseline should not produce a row of duplicate cards.
+8. Check at 1280×800 and mobile widths: dropdowns, primary actions and the dock must remain usable. Verify keyboard focus and range-input arrow keys.
+
+Automated regression tests now cover endpoint validity, directed no-route pairs, dynamic protection/restoration, synchronized planning UI, unchanged demo metadata, storyboard isolation and trivial history, journey reset/autoplay/looping, reduced motion, inactive-view timers and hidden-document cleanup. Visual browser verification remains manual.
+
+## Real Gemini incident advisor
+
+The local Express backend uses the official `@google/genai` SDK. The default model is `gemini-3.5-flash-lite`, chosen from Google's current [model catalog](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite) and [pricing documentation](https://ai.google.dev/gemini-api/docs/pricing) as a cost-efficient Flash model. It requests [structured JSON output](https://ai.google.dev/gemini-api/docs/generate-content/structured-output). Model access and quota depend on your Gemini project.
+
+Use Node.js **22.18 or newer** (Node 24 is recommended). The server directly imports the existing TypeScript graph using Node's native type stripping. The graph data, Dijkstra implementation and simulation state remain unchanged by this integration.
+
+### Start locally
+
+From the repository root:
+
+```bash
+npm install
+cp server/.env.example server/.env
+```
+
+Edit `server/.env` and replace the `GEMINI_API_KEY` placeholder with your actual API key. Never use a `VITE_` variable for this secret. The backend explicitly reads only `server/.env`; it does not take the key from frontend settings or the root `.env`. The file is gitignored; `server/.env.example` is safe to commit.
+
+Start the backend in one terminal:
+
+```bash
+npm run server
+```
+
+Start the frontend in another terminal:
+
+```bash
+npm run dev
+```
+
+Open the Vite URL, then Disruption Lab → **Analyze with Gemini**. Vite proxies `/api` to `http://127.0.0.1:3001`, avoiding a cross-origin browser request. Keep PORT at 3001 unless you also change the proxy. `npm run preview` only serves the frontend build; it does not provide the development API proxy. The backend binds to loopback and is intended for local development, not public hosting.
+
+Check backend configuration without making a paid model call:
+
+```bash
+curl http://127.0.0.1:3001/api/health
+```
+
+`status: "ok"` means the server runs. `advisorConfigured: true` means a non-placeholder key is present, not that Google has accepted it. Restart the server after changing its environment file.
+
+### Request and response contract
+
+`POST /api/ai/analyze` accepts `origin`, `destination`, `scenario` (`RR-2048` or `Custom plan`), the selected routing `objective`, `disruptedHubIds`, `originalRoute` when available, and the actual `options` (`fastest`/`cheapest`, path IDs, edge IDs, hours and cost). The backend reuses Dijkstra to verify both options, verifies the original directed path and totals, supplies canonical hub labels, and rejects inconsistent or forged inputs. No deadline or shipment-priority data exists, so none is manufactured or sent.
+
+Successful responses contain `source: "gemini"`, `model`, and a validated `analysis` with `incidentSummary`, `recommendedRouteId`, `explanation`, `tradeoffs` and `warnings`. Gemini must choose a supplied feasible ID; with no routes it must return null. This no-route analysis still invokes Gemini. A route ID outside the allowed set, malformed output or invalid schema causes an explicit API error. Numeric/currency claims in prose are rejected: exact route facts are rendered from verified graph data. Model instructions prohibit invented paths, deadlines, live infrastructure claims and unspecified facts; qualitative AI explanations still need human review.
+
+The advisor runs only on button clicks, blocks duplicate requests, cancels stale requests when its input changes or the view closes, and hides responses that do not match the current scenario. It never applies a route automatically. Request timeout, provider errors, missing keys and quota failures appear with retry controls. There is **no deterministic fallback represented as Gemini**, no automatic provider retries, and no external search/grounding tools.
+
+Implementation is isolated in `server/` (HTTP app, validation, SDK invocation, server-only config), `src/advisor.ts` (request contract/client) and `src/AIAdvisor.tsx` (lavender panel). Existing product views and interactions are retained.
+
+### Verification
+
+```bash
+npm run build
+npm test
+```
+
+Tests use injected provider responses rather than calling Google. They cover invalid data, forged routes, missing keys, malformed output, invalid recommendations, no-route output, provider failures, HTTP health/errors/success/concurrency, and advisor click/loading/duplicate/error/retry behavior, in addition to the original 17 regressions.
+
+A genuine external Gemini response has **not been verified in this workspace** because no `server/.env` API key is configured. After adding your key, click Analyze and confirm a response with the configured model label; then change a disruption while analyzing, exercise retry, and test a no-route scenario. Never treat provider-injected test responses as live-call verification.

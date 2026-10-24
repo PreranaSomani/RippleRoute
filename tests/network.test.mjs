@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const source=readFileSync(new URL('../src/network.ts',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {hubs,connections,findRoute,canDisrupt,toggleDisruption}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const {hubs,connections,findRoute,canDisrupt,toggleDisruption,validEndpoints}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const eligible=hubs.filter(h=>canDisrupt(h.id));
 function enumerate(at,closed,visited=new Set()){
   if(at==='site')return [{hours:0,cost:0}];
@@ -51,4 +51,19 @@ test('directed semantics, invalid inputs, capacity, no route, and baseline resto
     assert.ok(!findRoute('mill','site','hours',closed)?.ids.includes(id));
     assert.deepEqual(findRoute('mill','site','hours',toggleDisruption(closed,id)),baseline);
   }
+});
+
+
+test('arbitrary directed endpoint pairs, active endpoint protection, and identical-pair rejection',()=>{
+  assert.equal(validEndpoints('portA','site'),true);
+  assert.equal(validEndpoints('portA','portA'),false);
+  assert.equal(validEndpoints('missing','site'),false);
+  assert.equal(findRoute('portA','portA','hours',[]),null);
+  assert.equal(findRoute('portA','site','hours',[]).hours,19);
+  assert.equal(findRoute('site','portA','hours',[]),null);
+  assert.equal(findRoute('rail1','site','hours',['rail1']),null);
+  assert.equal(canDisrupt('rail1','rail1','portB'),false);
+  assert.equal(canDisrupt('mill','rail1','portB'),true);
+  assert.deepEqual(toggleDisruption([],'rail1','rail1','portB'),[]);
+  assert.deepEqual(toggleDisruption(['rail1'],'rail1','rail1','portB'),[]);
 });

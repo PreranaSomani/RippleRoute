@@ -27,6 +27,7 @@ test('demo position follows directed segments weighted by computed hours and cla
 // Execute the real playback hook's effects against a deterministic timer and media query.
 const hooksUrl=url(`let values=[],index=0,effects=[],pending=[],dirty=false;
 export function useState(initial){const i=index++;if(!(i in values))values[i]=typeof initial==='function'?initial():initial;return [values[i],v=>{const next=typeof v==='function'?v(values[i]):v;if(!Object.is(next,values[i])){values[i]=next;dirty=true}}]}
+export const useMemo=fn=>fn();
 export function useEffect(fn,deps){const i=index++;if(!effects[i]||deps.some((d,j)=>!Object.is(d,effects[i].deps[j]))){pending.push(()=>{effects[i]?.cleanup?.();effects[i]={deps,cleanup:fn()}})}}
 export function render(fn){let result,limit=20;do{dirty=false;index=0;result=fn();const jobs=pending;pending=[];jobs.forEach(fn=>fn());if(--limit===0)throw Error('Unstable hook')}while(dirty);return result}
 export function dispose(){effects.forEach(e=>e?.cleanup?.());values=[];effects=[];pending=[];}
@@ -55,4 +56,52 @@ test('playback timers pause, stop at the final event, seek, restart on route cha
   dispose();assert.equal(timers.size,0);assert.equal(listener,undefined);
   p=render(()=>usePlayback(1,'map',.1,180,true,true));assert.equal(p.running,false,'reduced motion prevents autoplay');
   dispose();delete globalThis.window;
+});
+
+test('journey autoplay is view-scoped, loops, resets on endpoint changes, and suspends in hidden tabs',()=>{
+  let timers=new Map(),nextTimer=0,visibilityListener,hidden=false;
+  globalThis.document={get hidden(){return hidden;},addEventListener(_,fn){visibilityListener=fn;},removeEventListener(){visibilityListener=undefined;}};
+  globalThis.window={setInterval(fn){timers.set(++nextTimer,fn);return nextTimer;},clearInterval(id){timers.delete(id);},matchMedia(){return {matches:false,addEventListener(){},removeEventListener(){}};}};
+  let enabled=false,signature='mill|site';
+  const update=()=>render(()=>usePlayback(1,signature,.5,100,true,true,enabled));
+  let p=update();assert.equal(p.running,false);assert.equal(timers.size,0);
+  enabled=true;p=update();assert.equal(p.running,true);assert.equal(timers.size,1);
+  const tick=()=>{[...timers.values()].forEach(fn=>fn());p=update();};
+  tick();assert.equal(p.position,.5);
+  hidden=true;visibilityListener();p=update();assert.equal(timers.size,0);assert.equal(p.running,false);
+  hidden=false;visibilityListener();p=update();assert.equal(timers.size,1);
+  tick();assert.equal(p.position,1);tick();assert.equal(p.position,0);
+  tick();signature='portA|site';p=update();assert.equal(p.position,0);assert.equal(p.running,true);
+  p.pause();p=update();assert.equal(timers.size,0);
+  enabled=false;p=update();enabled=true;p=update();assert.equal(p.running,true,'view entry starts the demo automatically');
+  dispose();assert.equal(timers.size,0);assert.equal(visibilityListener,undefined);
+  delete globalThis.window;delete globalThis.document;
+});
+
+test('shared simulation resets journey on endpoint changes and preserves historical route snapshots',async()=>{
+  const playbackUrl=url(playbackCode);
+  const simulationCode=compile('useSimulation.ts').replace("from 'react'",`from '${hooksUrl}'`).replace("from './usePlayback'",`from '${playbackUrl}'`).replace("from './network'",`from '${networkUrl}'`);
+  const {useSimulation,shipment}=await import(url(simulationCode));
+  let timers=new Map(),nextTimer=0;
+  globalThis.window={setInterval(fn){timers.set(++nextTimer,fn);return nextTimer;},clearInterval(id){timers.delete(id);},matchMedia(){return {matches:false,addEventListener(){},removeEventListener(){}};}};
+  let view='journeys';
+  const update=()=>render(()=>useSimulation(view));
+  let sim=update();assert.equal(sim.journeyPlayback.running,true);
+  [...timers.values()].forEach(fn=>fn());sim=update();assert.ok(sim.journeyPlayback.position>0);
+  sim.applyRoute();sim=update();const saved=JSON.stringify(sim.history.find(e=>e.kind==='route'));
+  assert.equal(sim.changeEndpoints('portA','site'),true);sim=update();
+  assert.equal(sim.journeyPlayback.position,0);assert.equal(sim.journeyPlayback.running,true);
+  assert.equal(sim.committed,null);assert.equal(sim.isDemo,false);
+  assert.deepEqual(sim.active.ids,['portA','portB','site']);
+  assert.equal(JSON.stringify(sim.history.find(e=>e.kind==='route')),saved);
+  assert.equal(shipment.originId,'mill');assert.equal(shipment.destinationId,'site');
+  assert.equal(sim.changeEndpoints('site','site'),false);
+  sim.changeEndpoints('site','portA');sim=update();assert.equal(sim.active,null);assert.equal(sim.journeyPlayback.running,false);
+  view='replay';sim=update();assert.equal(timers.size,0);
+  const current={origin:sim.origin,destination:sim.destination,closed:[...sim.closed]};
+  sim.incidentPlayback.seek(1);sim=update();
+  assert.deepEqual({origin:sim.origin,destination:sim.destination,closed:sim.closed},current);
+  sim.reset();sim=update();assert.equal(sim.origin,'mill');assert.equal(sim.destination,'site');
+  assert.equal(JSON.stringify(sim.history.find(e=>e.kind==='route')),saved);
+  dispose();assert.equal(timers.size,0);delete globalThis.window;
 });

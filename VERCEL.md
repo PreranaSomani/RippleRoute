@@ -2,7 +2,15 @@
 
 Keep the **Vite** preset, root directory at the repository root, build command `npm run build`, output directory `dist`, and Node.js **24.x**. The existing `>=22.18.0` package engine range currently resolves to Vercel's Node 24 runtime. No framework migration, frontend changes or new production dependencies are needed.
 
-`api/index.mjs` exports the existing Express application without calling `listen()` or importing the local `.env` loader. `vercel.json` forwards `/api/*` to this function, preserving original API paths, methods, JSON bodies and binary MP3 responses. Vite's static build continues serving `/`; no blanket SPA rewrite intercepts APIs. Existing local commands (`npm run server` plus `npm run dev`) are unchanged.
+`api/index.mjs` exports the compiled Express application without calling `listen()` or importing the local `.env` loader. `vercel.json` forwards `/api/*` to this function, preserving original API paths, methods, JSON bodies and binary MP3 responses. Vite's static build continues serving `/`; no blanket SPA rewrite intercepts APIs. Existing local commands (`npm run server` plus `npm run dev`) are unchanged.
+
+## Production backend build
+
+`npm run build` now builds both Vite and the backend. `npm run build:server` uses esbuild to compile `server/vercel-entry.mjs` and its complete local import graph into `server/generated/vercel.mjs` (plain JavaScript ESM). Shared fleet, network and briefing TypeScript is compiled from its existing source, without copying or changing calculations. npm dependencies remain external for Vercel's dependency tracing.
+
+`api/index.mjs` imports only that generated JavaScript bundle. `vercel.json` explicitly includes it in the function. The generated directory is ignored by Git and must be rebuilt; keep the Vercel build command set to `npm run build`. Do not change it to `vite build`, which builds only the frontend. `npm test` rebuilds the backend automatically via `pretest`.
+
+The regression test copies only the API adapter and generated bundle into a temporary directory with npm dependencies, leaves all `src/` and original backend modules absent, and runs Node with TypeScript support disabled. It tests health, binary voice output and Gemini responses using provider fixtures. This catches the previously missed production `ERR_MODULE_NOT_FOUND` failure without a deployment or paid API calls.
 
 ## Server-only environment variables
 

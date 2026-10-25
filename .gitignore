@@ -18,3 +18,5 @@ dist/
 # Editor files
 .vscode/
 .idea/
+# Generated backend bundle (rebuilt before deployment and tests)
+server/generated/

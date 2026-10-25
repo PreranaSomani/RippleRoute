@@ -6,10 +6,14 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 60,
-      "excludeFiles": "{**/.env,**/.env.*,**/*.key,**/*.pem,**/*.crt}"
+      "excludeFiles": "{**/.env,**/.env.*,**/*.key,**/*.pem,**/*.crt}",
+      "includeFiles": "server/generated/vercel.mjs"
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    }
   ]
 }

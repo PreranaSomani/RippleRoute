@@ -5,8 +5,8 @@ globalThis.window={setTimeout,clearTimeout,matchMedia:()=>({matches:false,addEve
 import ts from 'typescript';
 const url=s=>`data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
 const compile=path=>ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-const hooks=url(`let state=[],index=0;const scopes=new Map();export function render(fn,props){const previous=[state,index];if(!scopes.has(fn))scopes.set(fn,[]);state=scopes.get(fn);index=0;try{return fn(props)}finally{[state,index]=previous}}export function useState(initial){const i=index++,scope=state;if(!(i in scope))scope[i]=initial;return [scope[i],v=>{scope[i]=typeof v==='function'?v(scope[i]):v}]}export const useRef=initial=>{const [ref]=useState({current:initial});return ref};export const useMemo=fn=>fn();export const useEffect=()=>{};`);
-const {render}=await import(hooks);
+const hooks=url(`let state=[],index=0;const scopes=new Map();export function render(fn,props){const previous=[state,index];if(!scopes.has(fn))scopes.set(fn,[]);state=scopes.get(fn);index=0;try{return fn(props)}finally{[state,index]=previous}}export function setStateFor(fn,index,value){scopes.get(fn)[index]=value}export function useState(initial){const i=index++,scope=state;if(!(i in scope))scope[i]=initial;return [scope[i],v=>{scope[i]=typeof v==='function'?v(scope[i]):v}]}export const useRef=initial=>{const [ref]=useState({current:initial});return ref};export const useMemo=fn=>fn();export const useEffect=()=>{};`);
+const {render,setStateFor}=await import(hooks);
 const cache=new Map();
 function moduleUrl(path){
   if(cache.has(path))return cache.get(path);
@@ -29,8 +29,19 @@ const text=node=>typeof node==='string'||typeof node==='number'?String(node):Arr
 const simulatedEventCount=tree=>nodes(tree).filter(n=>n.type==='button'&&n.props?.['aria-label']?.startsWith('Replay event ')).length;
 let tree;
 const update=()=>tree=expand(render(App));
+// Exercise the retained internal view without relying on a sidebar entry.
+const openJourney=()=>{setStateFor(App,0,'journeys');update();};
 const button=label=>nodes(tree).find(n=>n.type==='button'&&text(n).trim()===label);
 const inspect=label=>{nodes(tree).find(n=>n.props?.['aria-label']===`Inspect ${label}`).props.onClick();update();};
+test('Lab is the landing view; sidebar hides Journeys while the internal view remains functional',()=>{
+  update();assert.ok(tree.props.className.includes('view-lab'));
+  const nav=nodes(tree).find(n=>n.props?.['aria-label']==='Main navigation');
+  assert.deepEqual(nodes(nav).filter(n=>n.type==='button').map(text),['Network Universe','Disruption Lab','Decision Replay']);
+  openJourney();assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Shipment Journeys'));
+  assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='journey replay position'));
+  button('Network Universe').props.onClick();update();
+});
+
 test('hub selection, disruption, restoration, no-route state, protected endpoints, and reset',()=>{
   update();
   for(const label of ['Central Junction','Allegheny Rail','Union Depot']){
@@ -55,7 +66,7 @@ test('four views share scenario, applied journey, decision snapshots, and reset'
   assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Restore Central Junction'));
   nodes(tree).find(n=>n.type==='button'&&text(n).includes('LOWEST COST')).props.onClick();update();
   button('Apply this route').props.onClick();update();
-  button('Shipment Journeys').props.onClick();update();
+  openJourney();
   assert.ok(nodes(tree).some(n=>n.props?.className?.trim()==='journey-status'&&text(n)==='Route applied'));
   assert.ok(text(tree).includes('SIMULATED RECORD'));
   assert.ok(text(tree).includes('Five fictional fleet records'));
@@ -72,7 +83,7 @@ test('four views share scenario, applied journey, decision snapshots, and reset'
   assert.ok(nodes(tree).some(n=>n.type==='h2'&&text(n)==='Allegheny Rail'));
   button('Disrupt this hub').props.onClick();update();
   inspect('Inland Yard');button('Disrupt this hub').props.onClick();update();
-  button('Shipment Journeys').props.onClick();update();
+  openJourney();
   assert.ok(text(tree).includes('This journey needs a connection.'));
   nodes(tree).find(n=>n.props?.['aria-label']==='Reset scenario').props.onClick();update();
   assert.ok(text(tree).includes('Route preview'));
@@ -87,6 +98,9 @@ test('four views share scenario, applied journey, decision snapshots, and reset'
 test('lab comparison selects the highlighted route, stores before/after, and exposes restoration',()=>{
   nodes(tree).find(n=>n.props?.['aria-label']==='Reset scenario').props.onClick();update();
   button('Disruption Lab').props.onClick();update();
+  assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Single shipment spatial planning'));
+  assert.equal(nodes(tree).filter(n=>n.type==='g'&&n.props?.className?.startsWith('spatial-hub ')).length,10);
+  assert.ok(!nodes(tree).some(n=>n.props?.className==='lab-map'));
   const chosen=()=>nodes(tree).filter(n=>n.props?.['data-route-edge']).map(n=>n.props['data-route-edge']);
   assert.deepEqual(chosen(),['mill-rail1','rail1-rail2','rail2-depot','depot-site']);
   nodes(tree).find(n=>n.type==='button'&&text(n).includes('LOWEST COST')).props.onClick();update();
@@ -94,17 +108,17 @@ test('lab comparison selects the highlighted route, stores before/after, and exp
   nodes(tree).find(n=>n.props?.id==='lab-hub').props.onChange({target:{value:'yard'}});update();
   button('Disrupt this hub').props.onClick();update();
   assert.ok(!chosen().some(id=>id.includes('yard')));
-  const impact=nodes(tree).find(n=>n.props?.className==='lab-impact');
+  const impact=nodes(tree).find(n=>n.props?.className==='single-plan-impact');
   assert.ok(text(impact).includes('Before 37 hrs · $1,570'));
   assert.ok(text(impact).includes('After 35 hrs · $1,770'));
   nodes(tree).find(n=>n.props?.['aria-label']==='Restore Inland Yard').props.onClick();update();
   assert.ok(chosen().includes('yard-depot'));
   button('Reset experiment').props.onClick();update();
-  assert.ok(text(tree).includes('START AN EXPERIMENT'));
+  assert.ok(text(tree).includes('Choose endpoints, select a hub to disrupt'));
 });
 
 test('journey replay supports play, pause, scrubbing, checkpoint selection, and truthful segment details',()=>{
-  button('Shipment Journeys').props.onClick();update();
+  openJourney();
   const byLabel=label=>nodes(tree).find(n=>n.props?.['aria-label']===label);
   byLabel('journey replay position').props.onChange({target:{value:'.5'}});update();
   assert.ok(text(tree).includes('50%'));
@@ -178,7 +192,7 @@ test('dynamic endpoints synchronize views, protect active hubs, reject invalid p
   assert.equal(button('Apply this route'),undefined);
   byLabel('Swap origin and destination').props.onClick();update();
   button('Apply this route').props.onClick();update();
-  button('Shipment Journeys').props.onClick();update();
+  openJourney();
   assert.ok(text(tree).includes('CUSTOM PLAN / JOURNEY PREVIEW'));
   assert.ok(nodes(tree).some(n=>n.type==='h2'&&text(n).includes('Harbor East')&&text(n).includes('Build Site')));
   assert.ok(text(tree).includes('Saved demo: RR-2048'));
@@ -251,18 +265,19 @@ test('fleet mode allocates, detects stale results, restores disruptions and send
   const byLabel=label=>nodes(tree).find(n=>n.props?.['aria-label']===label);
   byLabel('Reset scenario').props.onClick();update();
   button('Fleet planning · 5 simulated shipments').props.onClick();update();
-  assert.ok(text(tree).includes('SHARED CAPACITY'));assert.ok(text(tree).includes('RR-2052'));
-  assert.equal(byLabel('Gemini AI Advisor'),undefined);
-  button('Optimize Fleet').props.onClick();update();
-  assert.ok(text(tree).includes('Independent plans exceed capacity on 1 segments'));
+  assert.ok(text(tree).includes('105 / 90'));assert.ok(text(tree).includes('RR-2052'));
+  assert.ok(byLabel('Gemini AI Advisor'));
+  assert.ok(nodes(tree).some(n=>n.type==='fieldset'&&n.props.disabled));
+  button('Coordinate Fleet →').props.onClick();update();
+  assert.ok(text(tree).includes('70 / 90'));
   assert.ok(byLabel('Gemini AI Advisor'));
   const originalFetch=globalThis.fetch;let sent;
   globalThis.fetch=async(_url,config)=>{sent=JSON.parse(config.body);return {ok:true,json:async()=>({source:'gemini',model:'test',analysis:{incidentSummary:'Shared capacity is reserved.',recommendedRouteId:null,explanation:'The supplied fleet allocation respects edge capacity.',tradeoffs:[],warnings:[]}})};};
   try{await (button('Analyze with Gemini')??button('Retry Gemini analysis')).props.onClick();update();assert.equal(sent.mode,'fleet');assert.equal(sent.report.current.metrics.shipmentCount,5);assert.ok(text(tree).includes('Verified fleet report'));}finally{globalThis.fetch=originalFetch;}
-  byLabel('Fleet disruption hub').props.onChange({target:{value:'depot'}});update();button('Disrupt selected hub').props.onClick();update();
-  assert.ok(text(tree).includes('Re-run Optimize Fleet'));assert.equal(byLabel('Gemini AI Advisor'),undefined);
-  button('Optimize Fleet').props.onClick();update();assert.ok(text(tree).includes('no-route'));
-  button('Restore selected hub').props.onClick();update();
+  byLabel('Fleet disruption hub').props.onChange({target:{value:'depot'}});update();button('Close hub').props.onClick();update();
+  assert.ok(button('Coordinate Fleet →'));assert.ok(nodes(tree).some(n=>n.type==='fieldset'&&n.props.disabled));
+  button('Coordinate Fleet →').props.onClick();update();assert.ok(text(tree).includes('no-route'));
+  button('Restore hub').props.onClick();update();
   button('Single shipment planning').props.onClick();update();assert.ok(byLabel('Planning origin'));
 });
 
@@ -300,4 +315,72 @@ test('spatial prototype focuses neighborhoods, supports camera controls, and ret
   assert.ok(text(tree).includes('no feasible route remains'));
   assert.equal(button('Apply this route'),undefined);
   byLabel('Inspect Inland Yard').props.onKeyDown({key:'Escape',preventDefault(){}});update();assert.equal(byLabel('Contextual hub inspector'),undefined);
+});
+
+test('fleet spatial recovery coordinates real results and invalidates them when closures change',()=>{
+ update();nodes(tree).find(n=>n.props?.['aria-label']==='Reset scenario').props.onClick();update();
+ button('Disruption Lab').props.onClick();update();
+ button('Fleet planning · 5 simulated shipments').props.onClick();update();
+ assert.ok(text(tree).includes('105 / 90'));
+ button('Coordinate Fleet →').props.onClick();update();
+ assert.ok(text(tree).includes('70 / 90'));
+ assert.ok(text(tree).includes('5 / 5 allocated'));
+ assert.ok(text(tree).includes('Harbor East → Bluewater Port'));
+ button('Follow Shipment').props.onClick();update();
+ assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Selected shipment simulation'));
+ assert.ok(button('Pause'));
+ button('Pause').props.onClick();update();
+ assert.ok(button('Play'));
+ assert.ok(button('Restart'));
+ assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Shipment simulation progress'));
+ const records=nodes(tree).find(n=>n.props?.['aria-labelledby']==='fleet-records-title');
+ assert.ok(records&&records.type==='section');
+ const briefing=nodes(tree).find(n=>n.props?.['aria-labelledby']==='dispatcher-heading');
+ assert.ok(briefing&&briefing.type==='section');
+ assert.ok(text(briefing).includes('Listen to Briefing'));
+ assert.ok(text(records).includes('Simulated industrial dispatch cohort'));
+ const picker=nodes(tree).find(n=>n.props?.['aria-label']==='Fleet disruption hub');picker.props.onChange({target:{value:'rail2'}});update();
+ button('Close hub').props.onClick();update();
+ assert.ok(button('Coordinate Fleet →'));
+ assert.ok(!text(tree).includes('Allocation calculated ✓'));
+ button('Coordinate Fleet →').props.onClick();update();
+ assert.ok(text(tree).includes('unallocated'));
+ button('Explore another disruption ↺').props.onClick();update();
+ assert.ok(text(tree).includes('105 / 90'));
+ button('Single shipment planning').props.onClick();update();
+ assert.ok(button('Apply this route'));
+});
+
+test('Lab segment list starts with five relevant rows, expands, and invalidates allocation on objective changes',()=>{
+ update();nodes(tree).find(n=>n.props?.['aria-label']==='Reset scenario').props.onClick();update();
+ button('Disruption Lab').props.onClick();update();button('Fleet planning · 5 simulated shipments').props.onClick();update();
+ const segmentRows=()=>{const table=nodes(tree).find(n=>n.props?.['aria-label']==='Directed segment capacity table');return nodes(table).filter(n=>n.type==='tbody').flatMap(n=>nodes(n).filter(n=>n.type==='tr'));};
+ assert.equal(segmentRows().length,5);
+ assert.ok(text(segmentRows()[0]).includes('Central Junction → Union Depot'));
+ assert.ok(text(segmentRows()[0]).includes('overload'));
+ assert.ok(text(tree).includes('Awaiting coordination'));
+ assert.ok(!text(tree).includes('Not reserved'));
+ button('Show all (17)').props.onClick();update();assert.equal(segmentRows().length,17);
+ button('Show fewer').props.onClick();update();assert.equal(segmentRows().length,5);
+ button('Coordinate Fleet →').props.onClick();update();assert.ok(text(tree).includes('5 / 5 allocated'));
+ nodes(tree).find(n=>n.props?.['aria-label']==='Fleet objective').props.onChange({target:{value:'cost'}});update();
+ assert.ok(button('Coordinate Fleet →'));
+ assert.ok(!nodes(tree).some(n=>n.props?.className==='recovery-story'&&text(n).includes('5 / 5 allocated')));
+ assert.ok(nodes(tree).some(n=>n.type==='fieldset'&&n.props.disabled));
+ assert.ok(text(tree).includes('Lowest feasible cost: prefer on-time routes'));
+ button('Coordinate Fleet →').props.onClick();update();assert.ok(text(tree).includes('Result / verified allocation'));
+});
+
+test('shipment tracking shows clock-derived checkpoints and simulated completion without a graph',()=>{
+ update();nodes(tree).find(n=>n.props?.['aria-label']==='Reset scenario').props.onClick();update();
+ openJourney();
+ const byLabel=label=>nodes(tree).find(n=>n.props?.['aria-label']===label);
+ const seek=value=>{byLabel('journey replay position').props.onChange({target:{value:String(value)}});update();};
+ seek(0);assert.ok(text(tree).includes('At Steelworks'));
+ seek(.5);assert.ok(text(tree).includes('Traveling to Union Depot'));
+ assert.ok(nodes(tree).some(n=>n.props?.className==='tracking-stop is-next'&&text(n).includes('Union Depot')));
+ seek(1);assert.ok(text(tree).includes('Simulated delivery complete'));
+ assert.ok(nodes(tree).some(n=>n.props?.className==='tracking-stop is-current'&&text(n).includes('Build Site')));
+ assert.ok(!nodes(tree).some(n=>n.props?.className==='journey-canvas'||n.props?.className==='spatial-svg'));
+ byLabel('Replay journey from start').props.onClick();update();assert.ok(text(tree).includes('At Steelworks'));
 });

@@ -2,10 +2,11 @@ import {useEffect,useRef,useState} from 'react';
 import {canDisrupt,connections,fmt,hubs} from './network';
 import {routePosition} from './replay';
 import {connectedHubIds,defaultViewport,fitCamera,focusCamera,layoutPoints,overviewCamera,spatialPath,spatialPosition,spatialRadius,zoomCamera,type Camera,type SpatialViewport} from './spatialNetworkGeometry';
+import {bindFleetWheelZoom} from './fleetWheelZoom';
 import type {Simulation} from './useSimulation';
 function scenePoint(svg:SVGSVGElement,x:number,y:number){const matrix=svg.getScreenCTM();return matrix?new DOMPoint(x,y).matrixTransform(matrix.inverse()):{x,y};}
 const roles={mill:'Production origin for the fictional steel dispatch.',port:'Transfer terminal joining the industrial corridor.',rail:'A junction connecting alternative directed freight paths.',warehouse:'A staging and distribution point in the shared network.',destination:'The destination facility for the simulated dispatch.'};
-export function SpatialNetwork({sim}:{sim:Simulation}){
+export function SpatialNetwork({sim,lab=false}:{sim:Simulation;lab?:boolean}){
   const [focused,setFocused]=useState<string|null>(null),[camera,setCamera]=useState<Camera>(overviewCamera),[dragging,setDragging]=useState(false);
   const [viewport,setViewport]=useState<SpatialViewport>(defaultViewport);
   const canvas=useRef<SVGSVGElement|null>(null);
@@ -37,12 +38,16 @@ export function SpatialNetwork({sim}:{sim:Simulation}){
       scroll.scrollLeft=Math.max(0,target-scroll.clientWidth/2);
     }
   },[focused,sim.selected,viewport.width,viewport.height]);
+  useEffect(()=>{
+    if(!lab||!canvas.current)return;
+    return bindFleetWheelZoom(canvas.current,factor=>setCamera(c=>zoomCamera(c,factor,viewport)));
+  },[lab,viewport.width,viewport.height]);
   function focus(id:string){sim.setSelected(id);setFocused(id);setCamera(focusCamera(id,viewport,points));}
   function overview(){setFocused(null);setCamera(fitOverview());}
   function pan(x:number,y:number){setCamera(c=>({...c,x:Math.max(-900,Math.min(900,c.x+x)),y:Math.max(-650,Math.min(650,c.y+y))}));}
-  return <section className={`spatial-network ${focused?'is-focused':''} ${dragging?'is-dragging':''}`} aria-label="Network Universe spatial prototype">
-    <header className="spatial-toolbar"><div><span className="spatial-eyebrow">EASTERN CORRIDOR / INTERACTIVE SIMULATION</span><h2>Explore the corridor.</h2></div><button className="spatial-back" onClick={overview} disabled={isOverview}>← Back to Network</button></header>
-    <div className="spatial-controls"><div className="spatial-objectives" role="group" aria-label="Route objective"><button aria-pressed={sim.objective==='hours'} onClick={()=>sim.setObjective('hours')}>Fastest</button><button aria-pressed={sim.objective==='cost'} onClick={()=>sim.setObjective('cost')}>Lowest cost</button></div><label>Find a hub <select aria-label="Focus hub" value={focused??''} onChange={e=>e.target.value?focus(e.target.value):overview()}><option value="">Whole network</option>{hubs.map(h=><option value={h.id} key={h.id}>{h.label}{sim.closed.includes(h.id)?' · CLOSED':''}</option>)}</select></label><span className="spatial-scale">{isOverview?'Fit to window':`${Math.round(camera.scale*100)}% view`}</span></div>
+  return <section className={`spatial-network ${focused?'is-focused':''} ${dragging?'is-dragging':''}`} aria-label={lab?"Single shipment spatial planning":"Network Universe spatial prototype"}>
+    <header className="spatial-toolbar"><div><span className="spatial-eyebrow">EASTERN CORRIDOR / INTERACTIVE SIMULATION</span><h2>{lab?'Explore a shipment route.':'Explore the corridor.'}</h2></div><button className="spatial-back" onClick={overview} disabled={isOverview}>← Back to Network</button></header>
+    <div className="spatial-controls">{!lab&&<div className="spatial-objectives" role="group" aria-label="Route objective"><button aria-pressed={sim.objective==='hours'} onClick={()=>sim.setObjective('hours')}>Fastest</button><button aria-pressed={sim.objective==='cost'} onClick={()=>sim.setObjective('cost')}>Lowest cost</button></div>}<label>{lab?'Hub Explorer':'Find a hub'} <select id={lab?'lab-hub':undefined} aria-label="Focus hub" value={focused??''} onChange={e=>e.target.value?focus(e.target.value):overview()}><option value="">Whole network</option>{hubs.map(h=><option value={h.id} key={h.id}>{h.label}{sim.closed.includes(h.id)?' · CLOSED':''}</option>)}</select></label><span className="spatial-scale">{isOverview?'Fit to window':`${Math.round(camera.scale*100)}% view`}</span></div>
     <div className="spatial-environment">
       <div className="spatial-scroll" role="region" tabIndex={0} aria-label="Network camera: drag to pan; arrow keys pan; plus and minus zoom; Escape returns to overview" onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='Escape'){overview();e.preventDefault();}else if(e.key==='+'||e.key==='='){setCamera(c=>zoomCamera(c,1.15,viewport));e.preventDefault();}else if(e.key==='-'){setCamera(c=>zoomCamera(c,1/1.15,viewport));e.preventDefault();}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){pan(e.key==='ArrowLeft'?50:e.key==='ArrowRight'?-50:0,e.key==='ArrowUp'?50:e.key==='ArrowDown'?-50:0);e.preventDefault();}}}>
       <svg ref={canvas} viewBox={`0 0 ${viewport.width} ${viewport.height}`} preserveAspectRatio="xMidYMid meet" className="spatial-svg" role="group" aria-label="Interactive network map" onPointerDown={e=>{if(e.button!==0||(e.target as Element).closest('[role="button"], .spatial-label'))return;const point=scenePoint(e.currentTarget,e.clientX,e.clientY);drag.current={x:point.x,y:point.y,camera};setDragging(true);e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={e=>{if(!drag.current)return;const point=scenePoint(e.currentTarget,e.clientX,e.clientY);setCamera({...drag.current.camera,x:Math.max(-900,Math.min(900,drag.current.camera.x+point.x-drag.current.x)),y:Math.max(-650,Math.min(650,drag.current.camera.y+point.y-drag.current.y))});}} onPointerUp={()=>{drag.current=null;setDragging(false);}} onPointerCancel={()=>{drag.current=null;setDragging(false);}}>

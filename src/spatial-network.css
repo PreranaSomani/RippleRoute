@@ -238,3 +238,6 @@
  .workspace-shell.view-network .floating-dock{gap:4px}
  .workspace-shell.view-network .floating-dock button{padding:8px 10px;min-height:44px}
 }
+
+/* Initial container fitting is immediate; subsequent user camera actions still transition. */
+.spatial-network.is-initializing .spatial-world,.spatial-network.is-initializing .spatial-label,.spatial-network.is-initializing .spatial-label-offset{transition:none}

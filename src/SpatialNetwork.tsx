@@ -1,22 +1,27 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {canDisrupt,connections,fmt,hubs} from './network';
 import {routePosition} from './replay';
-import {connectedHubIds,defaultViewport,fitCamera,focusCamera,layoutPoints,overviewCamera,spatialPath,spatialPosition,spatialRadius,zoomCamera,type Camera,type SpatialViewport} from './spatialNetworkGeometry';
+import {connectedHubIds,defaultViewport,fitCamera,focusCamera,layoutPoints,spatialPath,spatialPosition,spatialRadius,zoomCamera,type Camera,type SpatialViewport} from './spatialNetworkGeometry';
 import {bindFleetWheelZoom} from './fleetWheelZoom';
 import type {Simulation} from './useSimulation';
 function scenePoint(svg:SVGSVGElement,x:number,y:number){const matrix=svg.getScreenCTM();return matrix?new DOMPoint(x,y).matrixTransform(matrix.inverse()):{x,y};}
 const roles={mill:'Production origin for the fictional steel dispatch.',port:'Transfer terminal joining the industrial corridor.',rail:'A junction connecting alternative directed freight paths.',warehouse:'A staging and distribution point in the shared network.',destination:'The destination facility for the simulated dispatch.'};
 export function SpatialNetwork({sim,lab=false}:{sim:Simulation;lab?:boolean}){
-  const [focused,setFocused]=useState<string|null>(null),[camera,setCamera]=useState<Camera>(overviewCamera),[dragging,setDragging]=useState(false);
+  const [focused,setFocused]=useState<string|null>(null),[camera,setCamera]=useState<Camera>(fitCamera(hubs.map(h=>h.id),defaultViewport,layoutPoints(defaultViewport))),[dragging,setDragging]=useState(false);
   const [viewport,setViewport]=useState<SpatialViewport>(defaultViewport);
+  const [sceneReady,setSceneReady]=useState(false);
   const canvas=useRef<SVGSVGElement|null>(null);
   const points=layoutPoints(viewport);
   const fitOverview=()=>fitCamera(hubs.map(h=>h.id),viewport,points);
   const isOverview=!focused&&Math.abs(camera.scale-fitOverview().scale)<.001&&Math.abs(camera.x-fitOverview().x)<.1&&Math.abs(camera.y-fitOverview().y)<.1;
-  useEffect(()=>{
+  useLayoutEffect(()=>{
     if(!canvas.current||typeof ResizeObserver==='undefined')return;
     const observer=new ResizeObserver(entries=>{const {width,height}=entries[0].contentRect;if(width>0&&height>0)setViewport(previous=>Math.abs(previous.width-width)<1&&Math.abs(previous.height-height)<1?previous:{width,height});});
-    observer.observe(canvas.current);return ()=>observer.disconnect();
+    const {width,height}=canvas.current.getBoundingClientRect();
+    if(width>0&&height>0)setViewport({width,height});
+    observer.observe(canvas.current);
+    const frame=requestAnimationFrame(()=>setSceneReady(true));
+    return ()=>{observer.disconnect();cancelAnimationFrame(frame);};
   },[]);
   const drag=useRef<{x:number;y:number;camera:Camera}|null>(null);
   const neighborhood=focused?connectedHubIds(focused):new Set(hubs.map(h=>h.id));
@@ -27,9 +32,11 @@ export function SpatialNetwork({sim,lab=false}:{sim:Simulation;lab?:boolean}){
   const marker=routePosition(safeRoute,sim.networkPlayback.position);
   const position=marker?spatialPosition(marker.edge.from,marker.edge.to,marker.t,points):null;
   const lastEvent=sim.history[0];
+  const entryRoute=useRef(`${routeKey}|${lastEvent?.id}`);
+  const changedAfterEntry=entryRoute.current!==`${routeKey}|${lastEvent?.id}`;
   const name=(id:string)=>hubs.find(h=>h.id===id)?.label??id;
   const incident=sim.previous?`${name(sim.previous.hubId)} ${sim.closed.includes(sim.previous.hubId)?'closed':'restored'}; ${!safeRoute?'no feasible route remains.':oldRoute?.edgeIds.join('|')===routeKey?'the selected route remains feasible.':oldRoute?'freight now follows the highlighted alternative.':'a feasible route is available again.'}`:null;
-  useEffect(()=>{
+  useLayoutEffect(()=>{
     const next=focused?focusCamera(sim.selected,viewport,points):fitOverview();
     if(focused)setFocused(sim.selected);setCamera(next);
     const scroll=canvas.current?.parentElement;
@@ -45,7 +52,7 @@ export function SpatialNetwork({sim,lab=false}:{sim:Simulation;lab?:boolean}){
   function focus(id:string){sim.setSelected(id);setFocused(id);setCamera(focusCamera(id,viewport,points));}
   function overview(){setFocused(null);setCamera(fitOverview());}
   function pan(x:number,y:number){setCamera(c=>({...c,x:Math.max(-900,Math.min(900,c.x+x)),y:Math.max(-650,Math.min(650,c.y+y))}));}
-  return <section className={`spatial-network ${focused?'is-focused':''} ${dragging?'is-dragging':''}`} aria-label={lab?"Single shipment spatial planning":"Network Universe spatial prototype"}>
+  return <section className={`spatial-network ${focused?'is-focused':''} ${dragging?'is-dragging':''} ${sceneReady?'':'is-initializing'}`} aria-label={lab?"Single shipment spatial planning":"Network Universe spatial prototype"}>
     <header className="spatial-toolbar"><div><span className="spatial-eyebrow">EASTERN CORRIDOR / INTERACTIVE SIMULATION</span><h2>{lab?'Explore a shipment route.':'Explore the corridor.'}</h2></div><button className="spatial-back" onClick={overview} disabled={isOverview}>← Back to Network</button></header>
     <div className="spatial-controls">{!lab&&<div className="spatial-objectives" role="group" aria-label="Route objective"><button aria-pressed={sim.objective==='hours'} onClick={()=>sim.setObjective('hours')}>Fastest</button><button aria-pressed={sim.objective==='cost'} onClick={()=>sim.setObjective('cost')}>Lowest cost</button></div>}<label>{lab?'Hub Explorer':'Find a hub'} <select id={lab?'lab-hub':undefined} aria-label="Focus hub" value={focused??''} onChange={e=>e.target.value?focus(e.target.value):overview()}><option value="">Whole network</option>{hubs.map(h=><option value={h.id} key={h.id}>{h.label}{sim.closed.includes(h.id)?' · CLOSED':''}</option>)}</select></label><span className="spatial-scale">{isOverview?'Fit to window':`${Math.round(camera.scale*100)}% view`}</span></div>
     <div className="spatial-environment">
@@ -59,8 +66,8 @@ export function SpatialNetwork({sim,lab=false}:{sim:Simulation;lab?:boolean}){
           <marker id="spatial-direction" viewBox="0 0 10 10" refX="38" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L10 5 0 10" fill="#92bebc"/></marker>
         </defs>
         <g className="spatial-world" style={{transform:`translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`}} data-camera-scale={camera.scale} data-view-mode={focused?'focused':'overview'}>
-          {connections.map(edge=>{const unavailable=sim.closed.includes(edge.from)||sim.closed.includes(edge.to),active=safeRoute?.edgeIds.includes(edge.id),related=!focused||edge.from===focused||edge.to===focused;return <g key={edge.id} className={`spatial-link ${unavailable?'is-unavailable':''} ${active?'is-active':''} ${related?'is-related':'is-distant'}`} data-route-edge={active?edge.id:undefined}><title>{name(edge.from)} → {name(edge.to)} · {edge.hours} hrs · ${fmt(edge.cost)} · {edge.capacity} t capacity{unavailable?' · unavailable':''}</title><path className="spatial-link-depth" d={spatialPath(edge.from,edge.to,points)} transform="translate(0 9)"/><path className="spatial-link-line" d={spatialPath(edge.from,edge.to,points)} markerEnd="url(#spatial-direction)"/>{active&&<path key={routeKey} className="spatial-new-route" d={spatialPath(edge.from,edge.to,points)}/>}</g>;})}
-          {oldRoute?.edgeIds.filter(id=>!safeRoute?.edgeIds.includes(id)).map(id=>{const edge=connections.find(e=>e.id===id)!;return <path key={`${lastEvent?.id}-${id}`} className="spatial-retired-route" d={spatialPath(edge.from,edge.to,points)} aria-hidden="true"/>;})}
+          {connections.map(edge=>{const unavailable=sim.closed.includes(edge.from)||sim.closed.includes(edge.to),active=safeRoute?.edgeIds.includes(edge.id),related=!focused||edge.from===focused||edge.to===focused;return <g key={edge.id} className={`spatial-link ${unavailable?'is-unavailable':''} ${active?'is-active':''} ${related?'is-related':'is-distant'}`} data-route-edge={active?edge.id:undefined}><title>{name(edge.from)} → {name(edge.to)} · {edge.hours} hrs · ${fmt(edge.cost)} · {edge.capacity} t capacity{unavailable?' · unavailable':''}</title><path className="spatial-link-depth" d={spatialPath(edge.from,edge.to,points)} transform="translate(0 9)"/><path className="spatial-link-line" d={spatialPath(edge.from,edge.to,points)} markerEnd="url(#spatial-direction)"/>{active&&changedAfterEntry&&<path key={routeKey} className="spatial-new-route" d={spatialPath(edge.from,edge.to,points)}/>}</g>;})}
+          {changedAfterEntry&&oldRoute?.edgeIds.filter(id=>!safeRoute?.edgeIds.includes(id)).map(id=>{const edge=connections.find(e=>e.id===id)!;return <path key={`${lastEvent?.id}-${id}`} className="spatial-retired-route" d={spatialPath(edge.from,edge.to,points)} aria-hidden="true"/>;})}
           {hubs.map(h=>{const p=points[h.id],closed=sim.closed.includes(h.id),related=neighborhood.has(h.id),chosen=focused===h.id;const r=spatialRadius(h.type,camera.scale);return <g key={h.id} className={`spatial-hub ${related?'':'is-distant'} ${closed?'is-closed':''} ${chosen?'is-chosen':''}`} role="button" tabIndex={0} aria-label={`Inspect ${h.label}`} aria-pressed={chosen} onClick={()=>focus(h.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();focus(h.id);}if(e.key==='Escape'){overview();e.preventDefault();}}}>
             <title>{h.label} · {h.type} · {closed?'closed':'available'}</title><circle cx={p.x} cy={p.y} r={r+15} fill="transparent"/><ellipse className="spatial-shadow" cx={p.x+6} cy={p.y+40/Math.min(1,camera.scale)} rx={r*1.2} ry="7"/>{chosen&&<ellipse className="spatial-orbit" cx={p.x} cy={p.y+6} rx={r+15} ry={r+8}/>}
             <circle className="spatial-sphere" cx={p.x} cy={p.y} r={r} fill={`url(#${closed?'spatial-red':chosen?'spatial-teal':h.type==='mill'||h.type==='destination'?'spatial-amber':'spatial-blue'})`}/><ellipse className="spatial-specular" cx={p.x-r*.29} cy={p.y-r*.4} rx={r*.32} ry={r*.18} transform={`rotate(-30 ${p.x-r*.29} ${p.y-r*.4})`}/>

@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {compareFleet,shipments} from './fleet';
 import {fleetHighlights} from './fleetHighlights';
 import {fleetStory} from './fleetStory';
@@ -18,10 +18,18 @@ export function FleetRecovery({sim}:{sim:Simulation}){
  const [conflictId,setConflictId]=useState(''),[follow,setFollow]=useState(''),[overview,setOverview]=useState(false);
  const [cameraOverride,setCameraOverride]=useState<Camera|null>(null),[dragging,setDragging]=useState(false);
  const [viewport,setViewport]=useState({width:1000,height:540});
+ const [sceneReady,setSceneReady]=useState(false);
  const canvas=useRef<SVGSVGElement>(null),drag=useRef<{x:number;y:number;camera:Camera}|null>(null);
  const story=fleetStory(report,conflictId),metrics=report.current.metrics;
  const signature=JSON.stringify([sim.closed,sim.objective,coordinated]);
- useEffect(()=>{if(!canvas.current)return;const observer=new ResizeObserver(([e])=>{if(e.contentRect.width&&e.contentRect.height){setViewport({width:e.contentRect.width,height:e.contentRect.height});setCameraOverride(null);}});observer.observe(canvas.current);return ()=>observer.disconnect();},[]);
+ useLayoutEffect(()=>{
+  if(!canvas.current)return;
+  const measure=({width,height}:{width:number;height:number})=>{if(width&&height){setViewport({width,height});setCameraOverride(null);}};
+  measure(canvas.current.getBoundingClientRect());
+  const observer=new ResizeObserver(([e])=>measure(e.contentRect));observer.observe(canvas.current);
+  const frame=requestAnimationFrame(()=>setSceneReady(true));
+  return ()=>{observer.disconnect();cancelAnimationFrame(frame);};
+ },[]);
  useEffect(()=>{setFollow('');setOverview(false);setCameraOverride(null);setConflictId('');},[sim.closed,sim.objective]);
  const rerouted=story.changed[0];
  const followed=coordinated?report.current.allocations.find(a=>a.shipmentId===follow)?.route??null:null;
@@ -53,7 +61,7 @@ export function FleetRecovery({sim}:{sim:Simulation}){
  function startFollow(id:string){setFollow(id);setOverview(false);setCameraOverride(null);playback.replay();canvas.current?.closest('.recovery-stage')?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
  function pan(x:number,y:number){setCameraOverride(c=>({...(c??camera),x:(c??camera).x+x,y:(c??camera).y+y}));}
  function scenePoint(svg:SVGSVGElement,x:number,y:number){const m=svg.getScreenCTM();return m?new DOMPoint(x,y).matrixTransform(m.inverse()):{x,y};}
- return <section className={`fleet-recovery spatial-network ${dragging?'is-dragging':''}`} aria-label="Fleet bottleneck and recovery">
+ return <section className={`fleet-recovery spatial-network ${dragging?'is-dragging':''} ${sceneReady?'':'is-initializing'}`} aria-label="Fleet bottleneck and recovery">
   <header className="recovery-heading"><div><span className="spatial-eyebrow">Disruption Lab / {coordinated?'Coordinated assignments':'Independent plans'}</span><h2>{coordinated?outcome:story.conflict?'Too much freight. One shared connection.':story.independentMissing?'Some freight cannot reach its destination.':'Room to move. Check the shared plan.'}</h2><p>{coordinated&&story.changed.length?`Decision: ${story.changed.map(a=>a.shipmentId).join(', ')} assigned to an alternate corridor.`:problem}</p></div><button className="spatial-back" onClick={reset}>Explore another disruption ↺</button></header>
   <div className="recovery-controls"><label>Objective <select aria-label="Fleet objective" aria-describedby="fleet-objective-help" value={sim.objective} onChange={e=>sim.setObjective(e.target.value as 'hours'|'cost')}><option value="hours">Fastest feasible</option><option value="cost">Lowest feasible cost</option></select></label><label>Hub <select aria-label="Fleet disruption hub" value={sim.selected} onChange={e=>sim.setSelected(e.target.value)}>{hubs.map(h=><option key={h.id} value={h.id}>{h.label}{sim.closed.includes(h.id)?' · CLOSED':''}</option>)}</select></label><button className="spatial-back" disabled={!sim.closed.includes(sim.selected)&&!canDisrupt(sim.selected,sim.origin,sim.destination)} onClick={()=>sim.toggleHub(sim.selected)}>{sim.closed.includes(sim.selected)?'Restore hub':'Close hub'}</button>{story.conflicts.length>1&&<label>{story.conflicts.length} conflicts <select aria-label="Inspect capacity conflict" value={story.edge?.id} onChange={e=>{setConflictId(e.target.value);setFollow('');setOverview(false);setCameraOverride(null);}}>{story.conflicts.map(c=>{const e=connections.find(e=>e.id===c.edgeId)!;return <option key={e.id} value={e.id}>{name(e.from)} → {name(e.to)}</option>;})}</select></label>}{sim.closed.map(id=><button className="recovery-restore" key={id} onClick={()=>sim.toggleHub(id)}>Restore {name(id)} ×</button>)}</div>
   <p id="fleet-objective-help" className="recovery-objective-help">{sim.objective==='hours'?'Fastest feasible: prefer on-time routes, then shortest duration; cost breaks ties.':'Lowest feasible cost: prefer on-time routes, then lowest booking cost; duration breaks ties.'} Both reserve shared capacity in priority/deadline order. There is no separate “Fast feasibility” objective. Changing objective requires Coordinate Fleet again.</p>

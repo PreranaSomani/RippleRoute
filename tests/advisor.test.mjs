@@ -90,3 +90,65 @@ test('fleet report fits the bounded HTTP contract and returns a verified fleet e
     assert.equal(result.status,200);assert.equal((await result.json()).analysis.recommendedRouteId,null);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+test('baseline numeric facts trigger exactly one correction with identical verified context and no rejected prose',async()=>{
+  const calls=[];
+  const result=await createAdvisor({apiKey:'test',generate:async params=>{
+    calls.push(params);
+    return {text:JSON.stringify(calls.length===1?{...analysis,explanation:'The fastest route takes 35 hours and costs $1,770; the cheapest takes 37 hours and costs $1,570.'}:analysis)};
+  }})(input());
+  assert.equal(calls.length,2);assert.deepEqual(result.analysis,analysis);
+  const facts=JSON.parse(calls[0].contents);
+  assert.equal(facts.origin.label,'Steelworks');assert.equal(facts.destination.label,'Build Site');
+  assert.equal(facts.options[0].hours,35);assert.equal(facts.options[0].cost,1770);
+  assert.equal(facts.options[1].hours,37);assert.equal(facts.options[1].cost,1570);
+  assert.equal(calls[1].contents,calls[0].contents);
+  assert.match(calls[1].config.systemInstruction,/CORRECTIVE ATTEMPT/);
+  assert.match(calls[1].config.systemInstruction,/Single mode/);
+  assert.ok(!calls[1].config.systemInstruction.includes('$1,770'));
+  assert.equal(calls[1].config.abortSignal,calls[0].config.abortSignal);
+  assert.ok(calls[1].config.httpOptions.timeout<=calls[0].config.httpOptions.timeout);
+  assert.equal(calls[1].config.httpOptions.retryOptions.attempts,1);
+  assert.match(calls[0].config.responseJsonSchema.properties.explanation.description,/No digits/);
+});
+test('fleet numeric rejection retries without changing allocations or recommending a single route',async()=>{
+  const {compareFleet,shipments}=await import('../src/fleet.ts');
+  const report=compareFleet(shipments,[]),payload={mode:'fleet',objective:'hours',disruptedHubIds:[],shipments,report,options:[]};
+  const before=JSON.stringify(payload);let calls=0;
+  const result=await createAdvisor({apiKey:'test',generate:async p=>{
+    calls++;assert.equal(p.config.responseJsonSchema.properties.recommendedRouteId.type,'null');
+    assert.deepEqual(JSON.parse(p.contents).report,report);
+    if(calls===2)assert.match(p.config.systemInstruction,/Fleet mode: recommendedRouteId must be null/);
+    return {text:JSON.stringify({...analysis,recommendedRouteId:null,explanation:calls===1?'All 5 shipments are routed; RR-2048 is reassigned.':'The recorded allocation reserves capacity and reassigns a shipment to an available alternative.'})};
+  }})(payload);
+  assert.equal(calls,2);assert.equal(result.analysis.recommendedRouteId,null);assert.equal(JSON.stringify(payload),before);
+});
+test('quantities in every prose field, percentages, Unicode digits and spelled-out statistics remain rejected after one retry',async()=>{
+  for(const patch of [{incidentSummary:'Save 20%.'},{explanation:'It costs $999.'},{tradeoffs:['Transit takes thirty hours.']},{warnings:['There are five shipments.']},{explanation:'Delivery takes ３５ hours.'},{explanation:'Savings are ten percent.'}]){
+    let calls=0;
+    await assert.rejects(()=>createAdvisor({apiKey:'test',generate:async()=>{calls++;return {text:JSON.stringify({...analysis,...patch})};}})(input()),e=>e.code==='UNVERIFIED_FACTS'&&e.status===502&&e.message.includes('Use the verified route and allocation details')&&!e.message.includes('999'));
+    assert.equal(calls,2);
+  }
+});
+test('valid responses, schema errors, bad recommendations and provider failures do not trigger corrective requests',async()=>{
+  let calls=0;
+  await createAdvisor({apiKey:'test',generate:async()=>{calls++;return {text:JSON.stringify(analysis)};}})(input());assert.equal(calls,1);
+  for(const value of ['not JSON','{}',JSON.stringify({...analysis,recommendedRouteId:'invented-route'})]){
+    calls=0;await assert.rejects(()=>createAdvisor({apiKey:'test',generate:async()=>{calls++;return {text:value};}})(input()));assert.equal(calls,1);
+  }
+  for(const error of [{status:429},{name:'TimeoutError'},new Error('provider-secret')]){
+    calls=0;await assert.rejects(()=>createAdvisor({apiKey:'test',generate:async()=>{calls++;throw error;}})(input()));assert.equal(calls,1);
+  }
+});
+test('aborted requests do not spend another request on a numeric correction',async()=>{
+  const controller=new AbortController();let calls=0;
+  await assert.rejects(()=>createAdvisor({apiKey:'test',generate:async()=>{calls++;controller.abort();return {text:JSON.stringify({...analysis,explanation:'35 hours.'})};}})(input(),{signal:controller.signal}),e=>e.code==='AI_TIMEOUT');
+  assert.equal(calls,1);
+});
+test('numeric retry still validates recommendation IDs and handles provider failure without further retry',async()=>{
+  for(const second of [async()=>({text:JSON.stringify({...analysis,recommendedRouteId:null})}),async()=>{throw {status:429};}]){
+    let calls=0;
+    await assert.rejects(()=>createAdvisor({apiKey:'test',generate:async()=>{calls++;return calls===1?{text:JSON.stringify({...analysis,explanation:'35 hours.'})}:second();}})(input()),e=>['INVALID_RECOMMENDATION','AI_RATE_LIMIT'].includes(e.code));
+    assert.equal(calls,2);
+  }
+});

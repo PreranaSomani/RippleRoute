@@ -33,7 +33,7 @@ test('production function runs without src, backend sources, or Node TypeScript 
         }
         if(address.startsWith('https://generativelanguage.googleapis.com/')){
           geminiCalls++;
-          return new Response(JSON.stringify({candidates:[{content:{role:'model',parts:[{text:JSON.stringify(analysis)}]},finishReason:'STOP'}]}),{headers:{'Content-Type':'application/json'}});
+          return new Response(JSON.stringify({candidates:[{content:{role:'model',parts:[{text:JSON.stringify(geminiCalls===1?{...analysis,explanation:'The route takes 35 hours.'}:analysis)}]},finishReason:'STOP'}]}),{headers:{'Content-Type':'application/json'}});
         }
         throw new Error('Unexpected outbound request: blocked by production test');
       };
@@ -47,7 +47,7 @@ test('production function runs without src, backend sources, or Node TypeScript 
         const voice=await post('/api/voice/briefing');assert.equal(voice.status,200);assert.match(voice.headers.get('content-type'),/^audio\\/mpeg/);assert.deepEqual(new Uint8Array(await voice.arrayBuffer()),audio);
         const gemini=await post('/api/ai/analyze');assert.equal(gemini.status,200);assert.equal((await gemini.json()).source,'gemini');
         const disconnected=await nativeFetch(base+'/api/incidents');assert.equal(disconnected.status,503);
-        assert.equal(voiceCalls,1);assert.equal(geminiCalls,1);
+        assert.equal(voiceCalls,1);assert.equal(geminiCalls,2);
         console.log('Production artifact initialized and served health, binary audio and Gemini with source files absent and TypeScript support disabled.');
       }finally{await new Promise(r=>server.close(r));}
     `);

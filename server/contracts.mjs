@@ -36,7 +36,7 @@ export function validateInput(raw){
   }
   return {...data,options:expected};
 }
-const prose=z.string().trim().min(1).max(1600);
+const prose=z.string().trim().min(1).max(1600).describe('Qualitative explanation using only verified input facts. No digits, currency symbols, percentages, shipment IDs, numerical quantities (including words), or derived savings/statistics. Exact figures are rendered separately.');
 export const analysisSchema=z.object({incidentSummary:prose,recommendedRouteId:z.enum(['fastest','cheapest']).nullable(),explanation:prose,tradeoffs:z.array(prose).max(6),warnings:z.array(prose).max(6)}).strict();
 export function outputSchema(data){
   const schema=z.toJSONSchema(analysisSchema);delete schema.$schema;
@@ -48,7 +48,7 @@ export function validateOutput(text,data){
   try{value=analysisSchema.parse(JSON.parse(text));}catch{throw new AdvisorError(502,'INVALID_AI_OUTPUT','Gemini returned an invalid analysis. Please retry.');}
   if(data.options.length?!data.options.some(o=>o.id===value.recommendedRouteId):value.recommendedRouteId!==null)throw new AdvisorError(502,'INVALID_RECOMMENDATION','Gemini recommended a route outside the feasible options. Please retry.');
   // Numeric route facts are rendered from verified graph data, never model prose.
-  if([value.incidentSummary,value.explanation,...value.tradeoffs,...value.warnings].some(s=>/[\d$€£]/u.test(s)))throw new AdvisorError(502,'UNVERIFIED_FACTS','Gemini included unverified numeric claims. Please retry.');
+  if([value.incidentSummary,value.explanation,...value.tradeoffs,...value.warnings].some(s=>/[\p{N}$€£%]/u.test(s)||/\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|half|double|triple)\b/iu.test(s)))throw new AdvisorError(502,'UNVERIFIED_FACTS','Gemini included unverified numeric claims. Please retry.');
   return value;
 }
 export function modelContext(data){

@@ -3,7 +3,7 @@ import {createIncidentStore} from './incidents.mjs';
 import {createVoice} from './voice.mjs';
 import {AdvisorError} from './contracts.mjs';
 import {createAdvisor,DEFAULT_MODEL} from './advisor.mjs';
-export function createApp({apiKey,model=DEFAULT_MODEL,generate,voiceApiKey,voiceId,fetchAudio,database}={}){
+export function createApp({apiKey,model=DEFAULT_MODEL,generate,voiceApiKey,voiceId,fetchAudio,database,maxAudioBytes}={}){
   const app=express();
   app.disable('x-powered-by');
   app.use(express.json({limit:'24kb',strict:true}));
@@ -20,7 +20,7 @@ export function createApp({apiKey,model=DEFAULT_MODEL,generate,voiceApiKey,voice
     res.on('close',disconnect);
     try{res.json(await analyze(req.body,{signal:controller.signal}));}catch(error){if(!res.destroyed)next(error);}finally{res.off('close',disconnect);busy=false;}
   });
-  const briefing=createVoice({apiKey:voiceApiKey,voiceId,fetchAudio});
+  const briefing=createVoice({apiKey:voiceApiKey,voiceId,fetchAudio,maxAudioBytes});
   let voiceBusy=false;
   app.post('/api/voice/briefing',async(req,res,next)=>{
     if(voiceBusy)return res.status(429).json({error:{code:'VOICE_BUSY',message:'A briefing is already generating. Retry after it finishes.'}});

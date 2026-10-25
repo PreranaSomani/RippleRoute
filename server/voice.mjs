@@ -34,7 +34,7 @@ export async function voiceFailure(response){
   return {category,code,message};
 }
 export function voiceConfigured(apiKey,voiceId){return [apiKey,voiceId].every(v=>typeof v==='string'&&!!v.trim()&&!v.trim().startsWith('replace_')&&!/\s/.test(v.trim())&&!/^https?:/i.test(v.trim()));}
-export function createVoice({apiKey,voiceId,fetchAudio=fetch,logError=entry=>console.error('[ElevenLabs]',JSON.stringify(entry))}={}){
+export function createVoice({apiKey,voiceId,fetchAudio=fetch,maxAudioBytes=Infinity,logError=entry=>console.error('[ElevenLabs]',JSON.stringify(entry))}={}){
   apiKey=apiKey?.trim();voiceId=voiceId?.trim();
   return async(raw,{signal}={})=>{
     const data=validateInput(raw);
@@ -53,6 +53,7 @@ export function createVoice({apiKey,voiceId,fetchAudio=fetch,logError=entry=>con
       }
       if(!response.headers.get('content-type')?.toLowerCase().startsWith('audio/mpeg'))throw new AdvisorError(502,'INVALID_AUDIO','ElevenLabs returned an unexpected audio format.');
       const audio=Buffer.from(await response.arrayBuffer());
+      if(audio.length>maxAudioBytes)throw new AdvisorError(502,'VOICE_TOO_LARGE','The generated briefing exceeds the hosting audio size limit.');
       if(!audio.length)throw new AdvisorError(502,'INVALID_AUDIO','ElevenLabs returned empty audio.');
       return {audio,transcript};
     }catch(error){

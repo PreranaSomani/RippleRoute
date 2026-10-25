@@ -54,8 +54,7 @@
 .recovery-briefing .ai-advisor strong{font-size:16px}.recovery-briefing .eyebrow{font-size:14px;letter-spacing:.025em}.recovery-briefing .voice-briefing audio{display:block;max-width:100%;margin-top:14px}.recovery-briefing .voice-briefing audio[hidden]{display:none}
 .recovery-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .fleet-recovery button:focus-visible,.fleet-recovery select:focus-visible,.fleet-recovery input:focus-visible,.recovery-scene-scroll:focus-visible,.recovery-table-scroll:focus-visible{outline:3px solid #e1b567;outline-offset:3px}
-.view-lab:has(.fleet-recovery) .view-heading{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);margin:0;padding:0}
-.view-lab:has(.fleet-recovery) .view-main{padding-top:14px;padding-bottom:40px}.view-lab:has(.fleet-recovery) .planning-mode button{font-size:15px}
+.view-lab .view-main{padding-top:14px;padding-bottom:40px}.view-lab .planning-mode button{font-size:15px}
 
 @media(max-width:1000px){.recovery-heading{flex-direction:column;gap:8px}.recovery-story{grid-template-columns:1fr}.recovery-action{flex-direction:row;align-items:center}.recovery-heading>button{max-width:none}}
 @media(max-width:760px){
@@ -68,7 +67,7 @@
  .recovery-records .recovery-shipments{min-width:0}.recovery-shipments thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
  .recovery-shipments tbody,.recovery-shipments tr,.recovery-shipments td{display:block}.recovery-shipments tr{border-bottom:2px solid #afc8c0;padding:14px 0}.recovery-shipments td{border:0;padding:8px 0;overflow-wrap:anywhere}.recovery-shipments td:before{content:attr(data-label);display:block;font-size:14px;font-weight:600;color:#4a686d}
  .recovery-records caption{display:table-caption;line-height:1.5}.recovery-briefing .ai-advisor{padding:16px}.recovery-briefing .ai-advisor header{flex-wrap:wrap}.recovery-briefing .voice-briefing small{display:block;margin:10px 0!important}
- .view-lab:has(.fleet-recovery) .view-main{padding-bottom:110px}.view-lab:has(.fleet-recovery) .planning-mode{display:flex;flex-wrap:wrap}.view-lab:has(.fleet-recovery) .planning-mode button{font-size:14px;white-space:normal;flex:1}
+ .view-lab .view-main{padding-bottom:110px}.view-lab .planning-mode{display:flex;flex-wrap:wrap}.view-lab .planning-mode button{font-size:14px;white-space:normal;flex:1}
 }
 @media(prefers-reduced-motion:reduce){.fleet-recovery .spatial-world,.fleet-recovery .spatial-label,.fleet-recovery .spatial-link-line{transition:none}.recovery-route-draw{animation:none;stroke-dashoffset:0;opacity:.25}}
 /* Playback stays beside the scene; normal document flow provides its full height. */

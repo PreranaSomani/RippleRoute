@@ -1,6 +1,6 @@
 import {SpatialNetwork} from './SpatialNetwork';
 import {FleetRecovery} from './FleetRecovery';
-import {useLayoutEffect} from 'react';
+import {useLayoutEffect,useRef} from 'react';
 import {AIAdvisor} from './AIAdvisor';
 import {EndpointPlanner} from './EndpointPlanner';
 import {ArrowRight} from 'lucide-react';
@@ -15,9 +15,20 @@ function Comparison({route,label,selected,onSelect}:{route:Route|null;label:stri
   return <button className={`comparison-card ${selected?'chosen':''}`} aria-pressed={selected} onClick={onSelect}><span className="panel-label">{label}</span>{route?<><strong>{route.hours}<small> hours</small></strong><span>${fmt(route.cost)} estimated cost</span><p>{routeDescription(route)}</p></>:<><strong>Unavailable</strong><p>No directed route is available. Change endpoints or restore an unavailable hub.</p></>}<span className="comparison-select">{selected?'Selected objective':'Choose objective'} <ArrowRight size={14}/></span></button>;
 }
 export function DisruptionLab({sim}:{sim:Simulation}){
+  const modeSwitchRequested=useRef(false);
   useLayoutEffect(()=>{sim.setPlanningMode('fleet');},[]);
+  useLayoutEffect(()=>{
+    if(!modeSwitchRequested.current)return;
+    modeSwitchRequested.current=false;
+    window.scrollTo({top:0,left:window.scrollX,behavior:'instant'});
+  },[sim.planningMode]);
+  function changeMode(mode:'single'|'fleet'){
+    if(mode===sim.planningMode)return;
+    modeSwitchRequested.current=true;
+    sim.setPlanningMode(mode);
+  }
   const before=sim.previous?.[sim.objective];
-  const modeSwitch=<div className="planning-mode" role="group" aria-label="Planning mode"><button aria-pressed={sim.planningMode==='single'} onClick={()=>sim.setPlanningMode('single')}>Single shipment planning</button><button aria-pressed={sim.planningMode==='fleet'} onClick={()=>sim.setPlanningMode('fleet')}>Fleet planning · 5 simulated shipments</button></div>;
+  const modeSwitch=<div className="planning-mode" role="group" aria-label="Planning mode"><button aria-pressed={sim.planningMode==='single'} onClick={()=>changeMode('single')}>Single shipment planning</button><button aria-pressed={sim.planningMode==='fleet'} onClick={()=>changeMode('fleet')}>Fleet planning · 5 simulated shipments</button></div>;
   if(sim.planningMode==='fleet')return <>{modeSwitch}<FleetRecovery sim={sim}/></>;
   return <>{modeSwitch}<section className="single-shipment-lab" aria-label="Single shipment planning">
     <div className="single-plan-controls"><EndpointPlanner sim={sim}/><button className="spatial-back" onClick={sim.reset}>Reset experiment</button></div>

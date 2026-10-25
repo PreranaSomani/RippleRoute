@@ -5,7 +5,7 @@ globalThis.window={setTimeout,clearTimeout,matchMedia:()=>({matches:false,addEve
 import ts from 'typescript';
 const url=s=>`data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
 const compile=path=>ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-const hooks=url(`let state=[],index=0;export function render(fn){index=0;return fn()}export function useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v}]}export const useRef=initial=>{const [ref]=useState({current:initial});return ref};export const useMemo=fn=>fn();export const useEffect=()=>{};`);
+const hooks=url(`let state=[],index=0;const scopes=new Map();export function render(fn,props){const previous=[state,index];if(!scopes.has(fn))scopes.set(fn,[]);state=scopes.get(fn);index=0;try{return fn(props)}finally{[state,index]=previous}}export function useState(initial){const i=index++,scope=state;if(!(i in scope))scope[i]=initial;return [scope[i],v=>{scope[i]=typeof v==='function'?v(scope[i]):v}]}export const useRef=initial=>{const [ref]=useState({current:initial});return ref};export const useMemo=fn=>fn();export const useEffect=()=>{};`);
 const {render}=await import(hooks);
 const cache=new Map();
 function moduleUrl(path){
@@ -21,7 +21,7 @@ const {default:App}=await import(moduleUrl('../src/App.tsx'));
 function expand(node){
   if(!node||typeof node!=='object')return node;
   if(Array.isArray(node))return node.map(expand);
-  if(typeof node.type==='function')return expand(node.type(node.props));
+  if(typeof node.type==='function')return expand(render(node.type,node.props));
   return {...node,props:{...node.props,children:expand(node.props?.children)}};
 }
 function nodes(node){if(!node||typeof node!=='object')return [];if(Array.isArray(node))return node.flatMap(nodes);return [node,...nodes(node.props?.children)];}

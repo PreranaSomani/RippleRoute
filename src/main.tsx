@@ -4,4 +4,5 @@ import App from './App';
 import './styles.css';
 import './interactions.css';
 import './refinements.css';
+import './spatial-network.css';
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);

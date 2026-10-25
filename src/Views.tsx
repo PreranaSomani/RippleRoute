@@ -1,3 +1,4 @@
+import {SpatialNetwork} from './SpatialNetwork';
 import {FleetWorkspace} from './FleetWorkspace';
 import {AIAdvisor} from './AIAdvisor';
 import {EndpointPlanner} from './EndpointPlanner';
@@ -7,7 +8,7 @@ import {HubInspector,NetworkMap,RoutingPanel,routeDescription} from './NetworkPa
 import {type Simulation} from './useSimulation';
 
 export function NetworkUniverse({sim}:{sim:Simulation}){
-  return <><EndpointPlanner sim={sim}/><section className="universe-scene" aria-label="Network Universe"><NetworkMap sim={sim}/><aside className="universe-inspector"><HubInspector sim={sim}/><RoutingPanel sim={sim}/></aside></section></>;
+  return <><EndpointPlanner sim={sim}/><SpatialNetwork sim={sim}/></>;
 }
 function Comparison({route,label,selected,onSelect}:{route:Route|null;label:string;selected:boolean;onSelect:()=>void}){
   return <button className={`comparison-card ${selected?'chosen':''}`} aria-pressed={selected} onClick={onSelect}><span className="panel-label">{label}</span>{route?<><strong>{route.hours}<small> hours</small></strong><span>${fmt(route.cost)} estimated cost</span><p>{routeDescription(route)}</p></>:<><strong>Unavailable</strong><p>No directed route is available. Change endpoints or restore an unavailable hub.</p></>}<span className="comparison-select">{selected?'Selected objective':'Choose objective'} <ArrowRight size={14}/></span></button>;
